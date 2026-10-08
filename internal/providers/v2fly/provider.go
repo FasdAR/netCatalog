@@ -91,39 +91,44 @@ func (p *Provider) download(ctx context.Context) (err error) {
 	if len(body) > maxBody {
 		return fmt.Errorf("release exceeds %d MiB", maxBody>>20)
 	}
+	p.lists, err = parseLists(body)
+	return err
+}
+
+func parseLists(body []byte) (map[string]list, error) {
 	var document struct {
 		Lists []list `yaml:"lists"`
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(body))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&document); err != nil {
-		return fmt.Errorf("invalid release YAML: %w", err)
+		return nil, fmt.Errorf("invalid release YAML: %w", err)
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		return fmt.Errorf("expected a single YAML document")
+		return nil, fmt.Errorf("expected a single YAML document")
 	}
 	if document.Lists == nil {
-		return fmt.Errorf("release YAML is missing lists")
+		return nil, fmt.Errorf("release YAML is missing lists")
 	}
-	p.lists = make(map[string]list)
+	lists := make(map[string]list)
 	for _, item := range document.Lists {
 		name := strings.ToLower(strings.TrimSpace(item.Name))
 		if strings.HasPrefix(name, "category") || strings.Contains(name, "-") {
 			continue
 		}
 		if name == "" || strings.ContainsAny(name, " \t\r\n:/@") {
-			return fmt.Errorf("invalid list name %q", item.Name)
+			return nil, fmt.Errorf("invalid list name %q", item.Name)
 		}
-		if _, exists := p.lists[name]; exists {
-			return fmt.Errorf("duplicate list %q", name)
+		if _, exists := lists[name]; exists {
+			return nil, fmt.Errorf("duplicate list %q", name)
 		}
 		if item.Length != len(item.Rules) {
-			return fmt.Errorf("list %q has inconsistent length", name)
+			return nil, fmt.Errorf("list %q has inconsistent length", name)
 		}
-		p.lists[name] = item
+		lists[name] = item
 	}
-	return nil
+	return lists, nil
 }
 
 // ListServices returns sorted named lists without guessing their domains.
@@ -134,12 +139,16 @@ func (p *Provider) ListServices(ctx context.Context) ([]resolver.Service, error)
 	if err := p.load(ctx); err != nil {
 		return nil, err
 	}
+	return listServices(p.lists), nil
+}
+
+func listServices(lists map[string]list) []resolver.Service {
 	services := []resolver.Service{}
-	for name := range p.lists {
-		services = append(services, resolver.Service{Name: name, Bindings: []resolver.Binding{{Source: p.ID(), Key: name}}})
+	for name := range lists {
+		services = append(services, resolver.Service{Name: name, Bindings: []resolver.Binding{{Source: "v2fly", Key: name}}})
 	}
 	sort.Slice(services, func(i, j int) bool { return services[i].Name < services[j].Name })
-	return services, nil
+	return services
 }
 
 // Fetch returns domain rules from the named list key as suffix entries.
@@ -155,13 +164,27 @@ func (p *Provider) Fetch(ctx context.Context, key string, q resolver.Query) (res
 	if err := p.load(ctx); err != nil {
 		return result, err
 	}
-	item, exists := p.lists[key]
+	return fetchList(ctx, p.lists, key, q)
+}
+
+func fetchList(ctx context.Context, lists map[string]list, key string, q resolver.Query) (resolver.Result, error) {
+	result := resolver.Result{Entries: []resolver.Entry{}, Warnings: []string{}}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	if q.Kind != resolver.Domains {
+		return result, fmt.Errorf("only domains are supported")
+	}
+	item, exists := lists[key]
 	if !exists {
 		return result, fmt.Errorf("unknown or excluded list %q", key)
 	}
 	result.Succeeded = 1
 	ignored, invalid := 0, 0
 	for _, rule := range item.Rules {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		if !strings.HasPrefix(rule, "domain:") {
 			ignored++
 			continue
