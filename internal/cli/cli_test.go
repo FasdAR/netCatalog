@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -50,7 +51,7 @@ func TestCLI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, diagnostics bytes.Buffer
 			args := append(append([]string{}, tt.args...), "--url", server.URL)
-			code := Run(context.Background(), args, &out, &diagnostics)
+			code := run(context.Background(), args, &out, &diagnostics, "")
 			if code != tt.code || !strings.Contains(out.String(), tt.contains) {
 				t.Fatalf("code=%d out=%q err=%q", code, out.String(), diagnostics.String())
 			}
@@ -93,7 +94,7 @@ func TestTelegramSearchAndResolution(t *testing.T) {
 	} {
 		var out, diagnostics bytes.Buffer
 		args := append(tt.args, "--url", server.URL)
-		code := Run(context.Background(), args, &out, &diagnostics)
+		code := run(context.Background(), args, &out, &diagnostics, "")
 		if code != tt.code || out.String() != tt.out || !strings.Contains(diagnostics.String(), tt.diagnostic) {
 			t.Fatalf("%v: code=%d out=%q err=%q", args, code, out.String(), diagnostics.String())
 		}
@@ -121,7 +122,7 @@ func TestCatalogueFailureAndSiteBypass(t *testing.T) {
 		{[]string{"get", "telegram.org", "--site", "--type", "ips"}, 0},
 	} {
 		var out, diagnostics bytes.Buffer
-		if code := Run(context.Background(), append(tt.args, "--url", server.URL), &out, &diagnostics); code != tt.code {
+		if code := run(context.Background(), append(tt.args, "--url", server.URL), &out, &diagnostics, ""); code != tt.code {
 			t.Fatalf("%v: code=%d diagnostics=%q", tt.args, code, diagnostics.String())
 		}
 	}
@@ -143,7 +144,7 @@ func TestInvalidArguments(t *testing.T) {
 	}
 	for _, args := range tests {
 		var out, diagnostics bytes.Buffer
-		if code := Run(context.Background(), args, &out, &diagnostics); code != 2 {
+		if code := run(context.Background(), args, &out, &diagnostics, ""); code != 2 {
 			t.Fatalf("%v: code=%d", args, code)
 		}
 	}
@@ -152,7 +153,7 @@ func TestInvalidArguments(t *testing.T) {
 func TestHelpAndSources(t *testing.T) {
 	for _, args := range [][]string{nil, {"--help"}, {"sources", "list"}, {"get", "youtube", "--help"}} {
 		var out, diagnostics bytes.Buffer
-		if code := Run(context.Background(), args, &out, &diagnostics); code != 0 {
+		if code := run(context.Background(), args, &out, &diagnostics, ""); code != 0 {
 			t.Fatalf("%v: code=%d", args, code)
 		}
 		if strings.Contains(out.String()+diagnostics.String(), "--format") {
@@ -194,7 +195,7 @@ func TestDiscordCombinesPortalsForEveryDataKind(t *testing.T) {
 			}))
 			defer server.Close()
 			var out, diagnostics bytes.Buffer
-			code := Run(context.Background(), []string{"get", "discord", "--type", kind, "--info", "--url", server.URL}, &out, &diagnostics)
+			code := run(context.Background(), []string{"get", "discord", "--type", kind, "--info", "--url", server.URL}, &out, &diagnostics, "")
 			want := map[string]string{
 				"domains": "cdn.discord.com\ndiscord.gg\n",
 				"ips":     "192.0.2.1\n192.0.2.2\n",
@@ -209,7 +210,7 @@ func TestDiscordCombinesPortalsForEveryDataKind(t *testing.T) {
 			calls = nil
 			out.Reset()
 			diagnostics.Reset()
-			code = Run(context.Background(), []string{"get", "discord.com", "--type", kind, "--url", server.URL}, &out, &diagnostics)
+			code = run(context.Background(), []string{"get", "discord.com", "--type", kind, "--url", server.URL}, &out, &diagnostics, "")
 			if code != 0 || !reflect.DeepEqual(calls, []string{"discord.com"}) {
 				t.Fatalf("exact selection broadened: code=%d calls=%v", code, calls)
 			}
@@ -244,7 +245,7 @@ func TestWarningsRequireInfo(t *testing.T) {
 				args = append(args, "--info")
 			}
 			var out, diagnostics bytes.Buffer
-			if code := Run(context.Background(), args, &out, &diagnostics); code != 0 {
+			if code := run(context.Background(), args, &out, &diagnostics, ""); code != 0 {
 				t.Fatalf("%v: code=%d diagnostics=%q", args, code, diagnostics.String())
 			}
 			if !info {
@@ -269,9 +270,127 @@ func TestTotalFailureAlwaysReportsError(t *testing.T) {
 		{"get", "telegram.org", "--site", "--type", "domains"},
 	} {
 		var out, diagnostics bytes.Buffer
-		code := Run(context.Background(), append(args, "--url", server.URL), &out, &diagnostics)
+		code := run(context.Background(), append(args, "--url", server.URL), &out, &diagnostics, "")
 		if code != 1 || out.Len() != 0 || !strings.Contains(diagnostics.String(), "error:") || strings.Contains(diagnostics.String(), "warning:") {
 			t.Fatalf("code=%d out=%q diagnostics=%q", code, out.String(), diagnostics.String())
 		}
+	}
+}
+
+func TestV2flyIntegration(t *testing.T) {
+	const release = `lists:
+  - name: discord
+    length: 4
+    rules: ["domain:shared.com", "domain:cdn.discord.com:@cn", "full:ignored.discord.com", "keyword:discord"]
+  - name: standalone
+    length: 1
+    rules: ["domain:standalone.org"]
+  - name: categorymessengers
+    length: 1
+    rules: ["domain:excluded.com"]
+  - name: discord-extra
+    length: 1
+    rules: ["domain:excluded.net"]
+`
+	for _, tt := range []struct {
+		name                  string
+		term                  string
+		iplistDown, v2flyDown bool
+		want                  string
+	}{
+		{name: "both sources", term: "discord", want: "cdn.discord.com\nshared.com\n"},
+		{name: "exact portal", term: "discord.com", want: "shared.com\n"},
+		{name: "standalone list", term: "standalone", want: "standalone.org\n"},
+		{name: "iplist unavailable", term: "discord", iplistDown: true, want: "cdn.discord.com\nshared.com\n"},
+		{name: "v2fly unavailable", term: "discord", v2flyDown: true, want: "shared.com\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var downloads atomic.Int32
+			v2flyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				downloads.Add(1)
+				if tt.v2flyDown {
+					http.Error(w, "unavailable", 503)
+					return
+				}
+				fmt.Fprint(w, release)
+			}))
+			defer v2flyServer.Close()
+			iplistServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.iplistDown {
+					http.Error(w, "unavailable", 503)
+					return
+				}
+				if r.URL.Query().Get("data") == "" {
+					fmt.Fprint(w, `{"discord.com":{},"discord.gg":{}}`)
+					return
+				}
+				if r.URL.Query().Get("site") == "discord.gg" {
+					http.Error(w, "unavailable", 503)
+					return
+				}
+				fmt.Fprint(w, `{"discord.com":["shared.com"]}`)
+			}))
+			defer iplistServer.Close()
+			var out, diagnostics bytes.Buffer
+			code := Run(context.Background(), []string{"get", tt.term, "--type", "domains", "--url", iplistServer.URL, "--v2fly-url", v2flyServer.URL}, &out, &diagnostics)
+			if code != 0 || out.String() != tt.want || diagnostics.Len() != 0 {
+				t.Fatalf("code=%d out=%q diagnostics=%q", code, out.String(), diagnostics.String())
+			}
+			if downloads.Load() != 1 {
+				t.Fatalf("release downloaded %d times", downloads.Load())
+			}
+		})
+	}
+}
+
+func TestV2flyNotRequestedForIPsCIDRsOrSite(t *testing.T) {
+	var downloads atomic.Int32
+	v2flyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downloads.Add(1)
+		http.Error(w, "must not be called", 503)
+	}))
+	defer v2flyServer.Close()
+	iplistServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("data") {
+		case "":
+			fmt.Fprint(w, `{"telegram.org":{}}`)
+		case "ip4":
+			fmt.Fprint(w, `{"telegram.org":["192.0.2.1"]}`)
+		case "cidr4":
+			fmt.Fprint(w, `{"telegram.org":["192.0.2.0/24"]}`)
+		case "domains":
+			fmt.Fprint(w, `{"telegram.org":["telegram.org"]}`)
+		}
+	}))
+	defer iplistServer.Close()
+	for _, command := range [][]string{
+		{"get", "telegram", "--type", "ips"},
+		{"get", "telegram", "--type", "cidrs"},
+		{"get", "telegram.org", "--type", "domains", "--site"},
+	} {
+		var out, diagnostics bytes.Buffer
+		args := append(command, "--url", iplistServer.URL, "--v2fly-url", v2flyServer.URL)
+		if code := Run(context.Background(), args, &out, &diagnostics); code != 0 {
+			t.Fatalf("%v: code=%d diagnostics=%q", command, code, diagnostics.String())
+		}
+	}
+	if downloads.Load() != 0 {
+		t.Fatal("domain-only source contacted for an unrelated request")
+	}
+}
+
+func TestCombinedCatalogue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/release" {
+			fmt.Fprint(w, "lists:\n  - name: telegram\n    length: 1\n    rules: [\"domain:telegram.org\"]\n  - name: categoryall\n    length: 0\n    rules: []\n")
+		} else {
+			fmt.Fprint(w, `{"telegram.org":{}}`)
+		}
+	}))
+	defer server.Close()
+	var out, diagnostics bytes.Buffer
+	code := Run(context.Background(), []string{"services", "search", "telegram", "--url", server.URL, "--v2fly-url", server.URL + "/release"}, &out, &diagnostics)
+	if code != 0 || out.String() != "telegram\ntelegram.org\n" {
+		t.Fatalf("code=%d out=%q diagnostics=%q", code, out.String(), diagnostics.String())
 	}
 }

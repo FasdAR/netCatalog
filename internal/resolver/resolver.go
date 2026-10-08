@@ -36,8 +36,16 @@ type Binding struct {
 }
 
 type Service struct {
+	Name     string    `json:"name,omitempty"`
 	Domain   string    `json:"domain"`
 	Bindings []Binding `json:"bindings"`
+}
+
+func (s Service) Identifier() string {
+	if s.Domain != "" {
+		return s.Domain
+	}
+	return s.Name
 }
 
 // Selection keeps a user-facing name separate from the discovered portals.
@@ -77,7 +85,9 @@ type Resolver struct {
 func (r Resolver) Fetch(ctx context.Context, selection Selection, q Query) Result {
 	result := Result{Service: selection.Name, Portals: []string{}, Kind: q.Kind, Entries: []Entry{}, Warnings: []string{}}
 	for _, service := range selection.Services {
-		result.Portals = append(result.Portals, service.Domain)
+		if service.Domain != "" {
+			result.Portals = append(result.Portals, service.Domain)
+		}
 	}
 	sort.Strings(result.Portals)
 	result.Portals = compact(result.Portals)
@@ -153,11 +163,17 @@ func (r Resolver) ListServices(ctx context.Context) Catalogue {
 		}
 		for _, service := range services {
 			domain := normalizeDomain(service.Domain)
-			if domain == "" {
+			name := normalizeDomain(service.Name)
+			if domain == "" && name == "" {
 				continue
 			}
-			merged := unique[domain]
+			key := "domain:" + domain
+			if domain == "" {
+				key = "name:" + name
+			}
+			merged := unique[key]
 			merged.Domain = domain
+			merged.Name = name
 			for _, binding := range service.Bindings {
 				if binding.Source != p.ID() || binding.Key == "" {
 					continue
@@ -171,7 +187,7 @@ func (r Resolver) ListServices(ctx context.Context) Catalogue {
 				}
 			}
 			if len(merged.Bindings) > 0 {
-				unique[domain] = merged
+				unique[key] = merged
 			}
 		}
 	}
@@ -184,7 +200,7 @@ func (r Resolver) ListServices(ctx context.Context) Catalogue {
 		})
 		result.Services = append(result.Services, service)
 	}
-	sort.Slice(result.Services, func(i, j int) bool { return result.Services[i].Domain < result.Services[j].Domain })
+	sort.Slice(result.Services, func(i, j int) bool { return result.Services[i].Identifier() < result.Services[j].Identifier() })
 	return result
 }
 
@@ -196,7 +212,7 @@ func (c Catalogue) Search(term string) []Service {
 	term = normalizeDomain(term)
 	matches := []Service{}
 	for _, service := range c.Services {
-		if strings.Contains(service.Domain, term) {
+		if strings.Contains(service.Identifier(), term) {
 			matches = append(matches, service)
 		}
 	}
@@ -209,7 +225,7 @@ func (c Catalogue) Resolve(term string) (Selection, error) {
 		return Selection{}, fmt.Errorf("service must not be empty")
 	}
 	for _, service := range c.Services {
-		if service.Domain == term {
+		if service.Domain == term && strings.Contains(term, ".") {
 			return Selection{Name: service.Domain, Services: []Service{service}}, nil
 		}
 	}
@@ -219,28 +235,28 @@ func (c Catalogue) Resolve(term string) (Selection, error) {
 		matches := []Service{}
 		for _, service := range c.Services {
 			label, _, hasSuffix := strings.Cut(service.Domain, ".")
-			if hasSuffix && label == term {
+			if (hasSuffix && label == term) || (service.Domain == "" && service.Name == term) || service.Domain == term {
 				matches = append(matches, service)
 			}
 		}
 		if len(matches) > 0 {
 			name := term
 			if len(matches) == 1 {
-				name = matches[0].Domain
+				name = matches[0].Identifier()
 			}
 			return Selection{Name: name, Services: matches}, nil
 		}
 	}
 	matches := c.Search(term)
 	if len(matches) == 1 {
-		return Selection{Name: matches[0].Domain, Services: matches}, nil
+		return Selection{Name: matches[0].Identifier(), Services: matches}, nil
 	}
 	if len(matches) == 0 {
 		return Selection{}, fmt.Errorf("no portal matching %q in the available catalogue", term)
 	}
 	domains := make([]string, 0, len(matches))
 	for _, service := range matches {
-		domains = append(domains, service.Domain)
+		domains = append(domains, service.Identifier())
 	}
 	return Selection{}, fmt.Errorf("ambiguous service %q; specify a domain: %s", term, strings.Join(domains, ", "))
 }

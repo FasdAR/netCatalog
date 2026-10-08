@@ -140,3 +140,24 @@ func TestFetchDeduplicatesBindingsAcrossPortals(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 }
+
+func TestResolveCombinesNamedListAndPortals(t *testing.T) {
+	c := Catalogue{Services: []Service{
+		{Name: "discord", Bindings: []Binding{{Source: "v2fly", Key: "discord"}}},
+		{Domain: "discord.com", Bindings: []Binding{{Source: "iplist", Key: "discord.com"}}},
+		{Domain: "discord.gg", Bindings: []Binding{{Source: "iplist", Key: "discord.gg"}}},
+		{Name: "standalone", Bindings: []Binding{{Source: "v2fly", Key: "standalone"}}},
+	}}
+	selection, err := c.Resolve("discord")
+	if err != nil || len(selection.Services) != 3 {
+		t.Fatalf("named list shadowed portals: %+v %v", selection, err)
+	}
+	selection, err = c.Resolve("discord.com")
+	if err != nil || len(selection.Services) != 1 || selection.Services[0].Domain != "discord.com" {
+		t.Fatalf("exact domain broadened: %+v %v", selection, err)
+	}
+	selection, err = c.Resolve("standalone")
+	if err != nil || len(selection.Services) != 1 || selection.Services[0].Name != "standalone" {
+		t.Fatalf("standalone list unavailable: %+v %v", selection, err)
+	}
+}

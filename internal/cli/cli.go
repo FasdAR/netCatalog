@@ -12,6 +12,7 @@ import (
 
 	"netcraze/internal/iplist"
 	"netcraze/internal/resolver"
+	"netcraze/internal/v2fly"
 )
 
 const usage = `Usage:
@@ -23,6 +24,7 @@ const usage = `Usage:
 Options (after the command):
   --family ipv4|ipv6|all   IP family (default ipv4; not for domains)
   --url URL              iplist endpoint (default https://iplist.opencck.org/)
+  --v2fly-url URL        v2fly compiled YAML release URL
   --timeout DURATION     Timeout per HTTP request (default 30s)
   --site                 Query an exact iplist portal without catalogue discovery
   --info                 Show warnings on stderr (orange in a terminal)
@@ -38,12 +40,16 @@ Exact domains (discord.com) select only that portal.
 
 // Run keeps process exit and OS streams outside the CLI so it is testable.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return run(ctx, args, stdout, stderr, v2fly.DefaultURL)
+}
+
+func run(ctx context.Context, args []string, stdout, stderr io.Writer, defaultV2flyURL string) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprint(stdout, usage)
 		return 0
 	}
 	if len(args) == 2 && args[0] == "sources" && args[1] == "list" {
-		_, err := fmt.Fprintln(stdout, "iplist\tdomains,ips,cidrs")
+		_, err := fmt.Fprintln(stdout, "iplist\tdomains,ips,cidrs\nv2fly\tdomains")
 		if err != nil {
 			return 1
 		}
@@ -79,6 +85,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	baseURL := flags.String("url", iplist.DefaultURL, "HTTP source URL")
+	v2flyURL := flags.String("v2fly-url", defaultV2flyURL, "compiled v2fly YAML release URL")
 	info := flags.Bool("info", false, "show warnings on stderr")
 	timeout := flags.Duration("timeout", 30*time.Second, "per-request timeout")
 	var kind, family string
@@ -124,6 +131,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	engine := resolver.Resolver{Providers: []resolver.Provider{p}}
+	// Domain-only sources are not contacted for IP/CIDR requests or --site.
+	if !site && (command == "services" || kind == "domains") && *v2flyURL != "" {
+		provider, err := v2fly.New(*v2flyURL, &http.Client{Timeout: *timeout})
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
+		engine.Providers = append(engine.Providers, provider)
+	}
 	warnings := warningPrinter{writer: stderr, enabled: *info, color: supportsColor(stderr)}
 	catalogue := resolver.Catalogue{Warnings: []string{}}
 	if !site {
@@ -137,7 +153,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if command == "services" {
 		filtered := catalogue.Search(term)
 		for _, service := range filtered {
-			if _, err = fmt.Fprintln(stdout, service.Domain); err != nil {
+			if _, err = fmt.Fprintln(stdout, service.Identifier()); err != nil {
 				break
 			}
 		}
