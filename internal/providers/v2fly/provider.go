@@ -14,9 +14,10 @@ import (
 	"sync"
 
 	"gopkg.in/yaml.v3"
-	"netcraze/internal/resolver"
+	"netCatalog/internal/resolver"
 )
 
+// DefaultURL points to the latest upstream compiled YAML release.
 const DefaultURL = "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat_plain.yml"
 const maxBody = 32 << 20
 
@@ -26,6 +27,11 @@ type list struct {
 	Rules  []string `yaml:"rules"`
 }
 
+// Provider exposes named domain lists from a compiled v2fly YAML release.
+// The release is loaded once per instance, including any loading error; a failed
+// load is not retried. The snapshot is held only in memory. Create a Provider
+// with [New] for each CLI invocation; the zero value is not usable.
+// ListServices and Fetch are safe to call concurrently.
 type Provider struct {
 	url    string
 	client *http.Client
@@ -36,6 +42,9 @@ type Provider struct {
 	err   error
 }
 
+// New creates a provider for an HTTP or HTTPS release URL without a fragment.
+// It returns an error for invalid URLs. A nil client uses [http.DefaultClient];
+// callers should supply a client with a timeout when bounded requests are needed.
 func New(rawURL string, client *http.Client) (*Provider, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.Fragment != "" {
@@ -47,7 +56,10 @@ func New(rawURL string, client *http.Client) (*Provider, error) {
 	return &Provider{url: rawURL, client: client}, nil
 }
 
-func (*Provider) ID() string                        { return "v2fly" }
+// ID returns the source identifier used in catalogue bindings and provenance.
+func (*Provider) ID() string { return "v2fly" }
+
+// Capabilities returns Domains, the only supported data kind.
 func (*Provider) Capabilities() []resolver.DataKind { return []resolver.DataKind{resolver.Domains} }
 
 func (p *Provider) load(ctx context.Context) error {
@@ -60,7 +72,7 @@ func (p *Provider) download(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "netcraze/0.1")
+	req.Header.Set("User-Agent", "netCatalog/0.1")
 	response, err := p.client.Do(req)
 	if err != nil {
 		return err
@@ -111,6 +123,10 @@ func (p *Provider) download(ctx context.Context) error {
 	return nil
 }
 
+// ListServices returns sorted named lists without guessing their domains.
+// Names starting with category or containing a hyphen are excluded. The first
+// call loads and validates the release, limited to 32 MiB. Loading failures are
+// returned as errors and retained for subsequent calls on this instance.
 func (p *Provider) ListServices(ctx context.Context) ([]resolver.Service, error) {
 	if err := p.load(ctx); err != nil {
 		return nil, err
@@ -123,6 +139,11 @@ func (p *Provider) ListServices(ctx context.Context) ([]resolver.Service, error)
 	return services, nil
 }
 
+// Fetch returns domain rules from the named list key as suffix entries.
+// Attributes are stripped, invalid domains are skipped, and full, keyword, and
+// regexp rules are ignored with warnings. Unsupported queries, unknown or
+// excluded lists, and release-loading failures return an error. A valid list
+// contributes one successful request even when no supported records remain.
 func (p *Provider) Fetch(ctx context.Context, key string, q resolver.Query) (resolver.Result, error) {
 	result := resolver.Result{Entries: []resolver.Entry{}, Warnings: []string{}}
 	if q.Kind != resolver.Domains {

@@ -8,39 +8,45 @@ import (
 	"strings"
 )
 
+// DataKind identifies the requested category of network records.
 type DataKind string
 
 const (
-	Domains DataKind = "domains"
-	IPs     DataKind = "ips"
-	CIDRs   DataKind = "cidrs"
+	Domains DataKind = "domains" // Domain rules.
+	IPs     DataKind = "ips"     // Individual IP addresses.
+	CIDRs   DataKind = "cidrs"   // Network prefixes in CIDR notation.
 )
 
+// Family selects IP versions for IP and CIDR queries; it is ignored for domains.
 type Family string
 
 const (
-	IPv4 Family = "ipv4"
-	IPv6 Family = "ipv6"
-	All  Family = "all"
+	IPv4 Family = "ipv4" // IPv4 only.
+	IPv6 Family = "ipv6" // IPv6 only.
+	All  Family = "all"  // Both IP versions.
 )
 
+// Query specifies the data kind and, for IP or CIDR records, the address family.
 type Query struct {
-	Kind   DataKind
-	Family Family
+	Kind   DataKind // Requested record category.
+	Family Family   // Requested IP versions; ignored for Domains.
 }
 
 // Binding holds an opaque source key. Only its provider interprets the key.
 type Binding struct {
-	Source string `json:"source"`
-	Key    string `json:"key"`
+	Source string `json:"source"` // Provider ID.
+	Key    string `json:"key"`    // Source-specific identifier, not a search term.
 }
 
+// Service is a discovered domain portal or named list. A named list need not
+// have a domain; the resolver does not infer one from its name.
 type Service struct {
-	Name     string    `json:"name,omitempty"`
-	Domain   string    `json:"domain"`
-	Bindings []Binding `json:"bindings"`
+	Name     string    `json:"name,omitempty"` // Source-reported list name, if any.
+	Domain   string    `json:"domain"`         // Domain identity, if provided.
+	Bindings []Binding `json:"bindings"`       // Sources that can fetch this service.
 }
 
+// Identifier returns the domain if present, otherwise the list name.
 func (s Service) Identifier() string {
 	if s.Domain != "" {
 		return s.Domain
@@ -50,38 +56,55 @@ func (s Service) Identifier() string {
 
 // Selection keeps a user-facing name separate from the discovered portals.
 type Selection struct {
-	Name     string
-	Services []Service
+	Name     string    // User-facing name of the selection.
+	Services []Service // Selected domain portals and named lists.
 }
 
+// Entry is a normalized domain, IP address, or network prefix. Domain rule types
+// remain distinct during merging even when their values match.
 type Entry struct {
-	Value    string   `json:"value"`
-	RuleType string   `json:"rule_type,omitempty"`
-	Sources  []string `json:"sources"`
+	Value    string   `json:"value"`               // Normalized record value.
+	RuleType string   `json:"rule_type,omitempty"` // Domain semantics, such as suffix or full.
+	Sources  []string `json:"sources"`             // Provider IDs; populated by Resolver.
 }
 
+// Result contains usable records and diagnostics from a fetch. Provider results
+// need only set Entries, Warnings, and Succeeded; Resolver adds selection metadata
+// and provenance. A result can be partial or successfully empty.
 type Result struct {
-	Service   string   `json:"service"`
-	Portals   []string `json:"portals"`
-	Kind      DataKind `json:"type"`
-	Family    Family   `json:"family,omitempty"`
-	Entries   []Entry  `json:"entries"`
-	Warnings  []string `json:"warnings"`
-	Succeeded int      `json:"successful_requests"`
+	Service   string   `json:"service"`             // User-facing selection name.
+	Portals   []string `json:"portals"`             // Selected domain identities, sorted and unique.
+	Kind      DataKind `json:"type"`                // Requested record category.
+	Family    Family   `json:"family,omitempty"`    // Requested IP versions; empty for Domains.
+	Entries   []Entry  `json:"entries"`             // Usable records, merged and sorted by Resolver.
+	Warnings  []string `json:"warnings"`            // Failed requests and skipped-record diagnostics.
+	Succeeded int      `json:"successful_requests"` // Successful logical requests, including empty ones.
 }
 
-// Provider is implemented implicitly: any type with these methods satisfies it.
+// Provider discovers services and retrieves normalized records using opaque
+// source keys. Implementations own all interpretation of those keys.
 type Provider interface {
+	// ID returns a stable source identifier used by Binding.Source.
 	ID() string
+	// Capabilities returns the data kinds supported by Fetch.
 	Capabilities() []DataKind
+	// ListServices may return usable services alongside an error for partial failure.
 	ListServices(context.Context) ([]Service, error)
+	// Fetch reports successful logical requests and warnings in Result.
+	// Usable entries may accompany an error; callers retain partial results.
 	Fetch(context.Context, string, Query) (Result, error)
 }
 
+// Resolver discovers and combines services from its configured providers.
+// Its zero value has no sources and returns empty results.
 type Resolver struct {
-	Providers []Provider
+	Providers []Provider // Sources in discovery and fetch order.
 }
 
+// Fetch retrieves supported records for selection, fetching each source binding
+// at most once. It retains partial results, records failures as warnings, and
+// deduplicates by rule type and value while preserving sorted source provenance.
+// It returns Succeeded == 0 if no logical requests succeeded.
 func (r Resolver) Fetch(ctx context.Context, selection Selection, q Query) Result {
 	result := Result{Service: selection.Name, Portals: []string{}, Kind: q.Kind, Entries: []Entry{}, Warnings: []string{}}
 	for _, service := range selection.Services {
@@ -142,13 +165,17 @@ func (r Resolver) Fetch(ctx context.Context, selection Selection, q Query) Resul
 	return result
 }
 
+// Catalogue is a snapshot of discovered domain portals and named lists.
 type Catalogue struct {
-	Services  []Service `json:"services"`
-	Warnings  []string  `json:"warnings"`
-	Succeeded int       `json:"successful_requests"`
+	Services  []Service `json:"services"`            // Services sorted by Identifier.
+	Warnings  []string  `json:"warnings"`            // Source discovery diagnostics.
+	Succeeded int       `json:"successful_requests"` // Sources returning success or usable partial records.
 }
 
-// ListServices discovers portals afresh and merges only exact domain identities.
+// ListServices asks every provider for its catalogue and retains partial results.
+// It normalizes identities, merges exact matching domains or named-list names,
+// and retains unique bindings belonging to their reporting provider. It does not
+// merge a named list with a domain merely because their names resemble each other.
 func (r Resolver) ListServices(ctx context.Context) Catalogue {
 	result := Catalogue{Services: []Service{}, Warnings: []string{}}
 	unique := make(map[string]Service)
@@ -208,6 +235,9 @@ func normalizeDomain(domain string) string {
 	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
 }
 
+// Search returns services whose identifiers contain the normalized term.
+// Matching is case-insensitive and ignores a trailing dot and surrounding spaces.
+// An empty term returns all services; opaque binding keys are never searched.
 func (c Catalogue) Search(term string) []Service {
 	term = normalizeDomain(term)
 	matches := []Service{}
@@ -219,6 +249,10 @@ func (c Catalogue) Search(term string) []Service {
 	return matches
 }
 
+// Resolve selects an exact domain first. A short name then selects all portals
+// with that entire first label and named lists with that name. This is a name
+// heuristic, not proof of shared ownership. Otherwise a unique substring match
+// is selected. Empty, missing, or ambiguous terms return an error.
 func (c Catalogue) Resolve(term string) (Selection, error) {
 	term = normalizeDomain(term)
 	if term == "" {

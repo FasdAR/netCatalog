@@ -13,17 +13,24 @@ import (
 	"sort"
 	"strings"
 
-	"netcraze/internal/resolver"
+	"netCatalog/internal/resolver"
 )
 
+// DefaultURL is the public iplist HTTP endpoint used by the CLI.
 const DefaultURL = "https://iplist.opencck.org/"
 const maxBody = 64 << 20
 
+// Provider adapts an iplist HTTP endpoint to [resolver.Provider]. Every call
+// obtains fresh data; no responses are cached. The zero value is not usable;
+// create a Provider with [New].
 type Provider struct {
 	base   *url.URL
 	client *http.Client
 }
 
+// New creates a provider for an HTTP or HTTPS baseURL without a fragment.
+// It returns an error for invalid URLs. A nil client uses [http.DefaultClient];
+// callers should supply a client with a timeout when bounded requests are needed.
 func New(baseURL string, client *http.Client) (*Provider, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.Fragment != "" {
@@ -35,8 +42,10 @@ func New(baseURL string, client *http.Client) (*Provider, error) {
 	return &Provider{base: u, client: client}, nil
 }
 
+// ID returns the source identifier used in catalogue bindings and provenance.
 func (*Provider) ID() string { return "iplist" }
 
+// Capabilities returns the supported domain, IP, and CIDR data kinds.
 func (*Provider) Capabilities() []resolver.DataKind {
 	return []resolver.DataKind{resolver.Domains, resolver.IPs, resolver.CIDRs}
 }
@@ -58,7 +67,7 @@ func (p *Provider) request(ctx context.Context, params url.Values, target any) e
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "netcraze/0.1")
+	req.Header.Set("User-Agent", "netCatalog/0.1")
 	response, err := p.client.Do(req)
 	if err != nil {
 		return err
@@ -88,6 +97,10 @@ func (p *Provider) request(ctx context.Context, params url.Values, target any) e
 	return nil
 }
 
+// ListServices downloads the full catalogue and returns sorted domain portals
+// with their source bindings. Source groups are not services. Invalid records
+// are skipped; usable services may be returned together with an error describing
+// skipped records. HTTP, size-limit, and decoding failures return an error.
 func (p *Provider) ListServices(ctx context.Context) ([]resolver.Service, error) {
 	var sites map[string]json.RawMessage
 	if err := p.request(ctx, nil, &sites); err != nil {
@@ -112,6 +125,12 @@ func (p *Provider) ListServices(ctx context.Context) ([]resolver.Service, error)
 	return services, nil
 }
 
+// Fetch requests the portal key for q. IPv4 and IPv6 requests are independent;
+// failed requests and invalid records are reported in Result.Warnings, while
+// successful requests contribute to Result.Succeeded, even if empty. A complete
+// HTTP failure is therefore represented by Succeeded == 0, not a non-nil error.
+// Invalid keys or queries return an error. Each response is limited to 64 MiB.
+// CIDRs are masked but not aggregated and retain upstream's raw network scope.
 func (p *Provider) Fetch(ctx context.Context, key string, q resolver.Query) (resolver.Result, error) {
 	result := resolver.Result{Entries: []resolver.Entry{}, Warnings: []string{}}
 	if strings.TrimSpace(key) == "" {

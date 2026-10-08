@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"golang.org/x/term"
 )
 
 const orange = "\x1b[38;5;208m"
@@ -33,5 +35,5 @@ func supportsColor(writer io.Writer) bool {
 		return false
 	}
 	file, ok := writer.(*os.File)
-	return ok && isTerminal(file.Fd())
+	return ok && term.IsTerminal(int(file.Fd()))
 }

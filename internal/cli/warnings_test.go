@@ -4,58 +4,92 @@ import (
 	"bytes"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestWarningPrinter(t *testing.T) {
-	for _, tt := range []struct {
-		enabled, color bool
-		want           string
-	}{
-		{false, false, ""}, {false, true, ""},
-		{true, false, "warning: skipped record\n"},
-		{true, true, orange + "warning: skipped record" + resetColor + "\n"},
-	} {
-		var out bytes.Buffer
-		warningPrinter{writer: &out, enabled: tt.enabled, color: tt.color}.print([]string{"skipped record"})
-		if out.String() != tt.want {
-			t.Fatalf("got %q, want %q", out.String(), tt.want)
+func TestWarningPrinterHidesDisabledWarnings(t *testing.T) {
+	var out bytes.Buffer
+	warningPrinter{writer: &out}.print([]string{"skipped record"})
+	assert.Empty(t, out.String())
+}
+
+func TestWarningPrinterHidesDisabledColoredWarnings(t *testing.T) {
+	var out bytes.Buffer
+	warningPrinter{writer: &out, color: true}.print([]string{"skipped record"})
+	assert.Empty(t, out.String())
+}
+
+func TestWarningPrinterPrintsPlainWarnings(t *testing.T) {
+	var out bytes.Buffer
+	warningPrinter{writer: &out, enabled: true}.print([]string{"skipped record"})
+	assert.Equal(t, "warning: skipped record\n", out.String())
+}
+
+func TestWarningPrinterPrintsColoredWarnings(t *testing.T) {
+	var out bytes.Buffer
+	warningPrinter{writer: &out, enabled: true, color: true}.print([]string{"skipped record"})
+	assert.Equal(t, "\x1b[38;5;208mwarning: skipped record\x1b[0m\n", out.String())
+}
+
+func unsetEnv(t *testing.T, key string) {
+	t.Helper()
+	value, exists := os.LookupEnv(key)
+	require.NoError(t, os.Unsetenv(key))
+	t.Cleanup(func() {
+		if exists {
+			require.NoError(t, os.Setenv(key, value))
+		} else {
+			require.NoError(t, os.Unsetenv(key))
 		}
-	}
+	})
 }
 
-func TestColorDisabledForRedirectedOutput(t *testing.T) {
+func plainTerminalEnv(t *testing.T) {
+	t.Helper()
+	unsetEnv(t, "NO_COLOR")
+	t.Setenv("TERM", "xterm-256color")
+}
+
+func TestSupportsColorRejectsBuffer(t *testing.T) {
+	plainTerminalEnv(t)
 	var buffer bytes.Buffer
-	if supportsColor(&buffer) {
-		t.Fatal("buffer must not use color")
-	}
-	file, err := os.CreateTemp(t.TempDir(), "stderr")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-	if supportsColor(file) {
-		t.Fatal("regular file must not use color")
-	}
-	if isTerminal(file.Fd()) {
-		t.Fatal("regular file is not a terminal")
-	}
-	device, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer device.Close()
-	if supportsColor(device) {
-		t.Fatal("character device is not necessarily a terminal")
-	}
+	assert.False(t, supportsColor(&buffer))
 }
 
-func TestColorDisabledByEnvironment(t *testing.T) {
+func TestSupportsColorRejectsRegularFile(t *testing.T) {
+	plainTerminalEnv(t)
+	file, err := os.CreateTemp(t.TempDir(), "stderr")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, file.Close()) })
+	assert.False(t, supportsColor(file))
+}
+
+func TestSupportsColorRejectsNullDevice(t *testing.T) {
+	plainTerminalEnv(t)
+	device, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, device.Close()) })
+	assert.False(t, supportsColor(device))
+}
+
+func TestSupportsColorRejectsPipe(t *testing.T) {
+	plainTerminalEnv(t)
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, reader.Close()); require.NoError(t, writer.Close()) })
+	assert.False(t, supportsColor(writer))
+}
+
+func TestSupportsColorHonorsEmptyNoColor(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	if supportsColor(os.Stderr) {
-		t.Fatal("NO_COLOR presence must disable color")
-	}
+	t.Setenv("TERM", "xterm-256color")
+	assert.False(t, supportsColor(os.Stderr))
+}
+
+func TestSupportsColorHonorsDumbTerminal(t *testing.T) {
+	unsetEnv(t, "NO_COLOR")
 	t.Setenv("TERM", "dumb")
-	if supportsColor(os.Stderr) {
-		t.Fatal("dumb terminal must not use color")
-	}
+	assert.False(t, supportsColor(os.Stderr))
 }

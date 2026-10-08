@@ -1,4 +1,4 @@
-# netcraze
+# netCatalog
 
 CLI на Go для получения доменов, IP-адресов и CIDR-подсетей сервисов.
 Подключены публичный [iplist](https://github.com/rekryt/iplist) и готовая YAML-выгрузка
@@ -11,49 +11,51 @@ CLI на Go для получения доменов, IP-адресов и CIDR-
 `brew install go` либо скачать с <https://go.dev/dl/>.
 
 ```sh
-go build -o bin/netcraze ./cmd/netcraze
+go build -o bin/netCatalog ./cmd/netCatalog
 go test -race ./...
 go vet ./...
 ```
 
-Вместо сборки можно запускать `go run ./cmd/netcraze ...`.
-Для разбора YAML используется `gopkg.in/yaml.v3`; остальные компоненты — стандартная
-библиотека Go. Зависимости зафиксированы в `go.mod` и `go.sum`.
+Вместо сборки можно запускать `go run ./cmd/netCatalog ...`.
+Для команд и help используется Cobra, для определения терминала —
+`golang.org/x/term`, для разбора YAML — `gopkg.in/yaml.v3`.
+Тесты используют стандартный `testing` и Testify (`assert`/`require`).
+Версии зависимостей совместимы с Go 1.22 и зафиксированы в `go.mod` и `go.sum`.
 
 ## Использование
 
 ```sh
 # Динамический каталог порталов iplist и имён списков v2fly
-bin/netcraze services list
-bin/netcraze services search telegram
+bin/netCatalog services list
+bin/netCatalog services search telegram
 # telegram и telegram.org (если они присутствуют в выбранных источниках)
 
 # Домены: по одному на строку, без префиксов
-bin/netcraze get youtube --type domains
+bin/netCatalog get youtube --type domains
 
 # Показать предупреждения (оранжевые в терминале, в stderr)
-bin/netcraze get telegram --type domains --info
+bin/netCatalog get telegram --type domains --info
 
 # Объединить список discord из v2fly и порталы discord.* из iplist
-bin/netcraze get discord --type domains
+bin/netCatalog get discord --type domains
 
 # Отдельные IP / подсети; IPv4 по умолчанию
-bin/netcraze get youtube --type ips
-bin/netcraze get youtube --type cidrs --family ipv4
-bin/netcraze get youtube --type cidrs --family ipv6
-bin/netcraze get youtube --type ips --family all
+bin/netCatalog get youtube --type ips
+bin/netCatalog get youtube --type cidrs --family ipv4
+bin/netCatalog get youtube --type cidrs --family ipv6
+bin/netCatalog get youtube --type ips --family all
 
 # Точный домен имеет приоритет перед поиском по подстроке
-bin/netcraze get youtube.com --type domains
+bin/netCatalog get youtube.com --type domains
 
 # Низкоуровневый запрос без загрузки каталога
-bin/netcraze get youtube.com --site --type domains
+bin/netCatalog get youtube.com --site --type domains
 
 # Собственный экземпляр iplist или другой публичный портал
-bin/netcraze get youtube --type ips --url https://iplist.opencck.org/ --timeout 15s
+bin/netCatalog get youtube --type ips --url https://iplist.opencck.org/ --timeout 15s
 
-bin/netcraze sources list
-bin/netcraze --help
+bin/netCatalog sources list
+bin/netCatalog --help
 ```
 
 Каталог строится из источников при каждом вызове, без заданных вручную соответствий.
@@ -94,7 +96,9 @@ v2fly при этом не вызывается.
 Одинаковые домены разных источников объединяются с сохранением всех привязок;
 их внутренние ключи не участвуют в пользовательском поиске.
 
-Все флаги указываются **после команды и позиционного аргумента**, как в примерах.
+В примерах флаги указываются после команды и позиционного аргумента.
+Cobra формирует help для каждой команды: `netCatalog get --help`,
+`netCatalog services search --help`. Help не обращается к HTTP-источникам.
 `--type` обязателен. `--family` имеет значения `ipv4`, `ipv6`, `all` и запрещён для доменов.
 Флага `--format` нет: вывод всегда текстовый, одна запись на строку.
 
@@ -105,8 +109,8 @@ v2fly при этом не вызывается.
   Флаг `--info` включает предупреждения для `get` и `services list/search`.
   В терминале они оранжевые (ANSI 256-color, цвет 208); при перенаправлении `stderr`
   в файл/pipe, наличии переменной `NO_COLOR` (в том числе пустой) или `TERM=dumb`
-  используются обычные строки без ANSI-кодов. Автоцвет поддерживается на macOS/Linux;
-  на остальных платформах предупреждения выводятся без цвета.
+  используются обычные строки без ANSI-кодов. Для определения терминала используется
+  `golang.org/x/term`, без собственных платформенных системных вызовов.
 - Неудачные запросы и некорректные записи пропускаются. Например, при сбое IPv6
   команда с `--family all` всё равно вернёт полученные IPv4.
 - Код завершения `0`: хотя бы один успешный запрос, в том числе пустой или частичный результат.
@@ -155,9 +159,9 @@ https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat_
   `--v2fly-url ''` отключает этот источник для конкретной команды.
 
 ```sh
-bin/netcraze get discord --type domains
-bin/netcraze get discord --type domains --info
-bin/netcraze get discord --type domains --v2fly-url ''  # только iplist
+bin/netCatalog get discord --type domains
+bin/netCatalog get discord --type domains --info
+bin/netCatalog get discord --type domains --v2fly-url ''  # только iplist
 ```
 
 ## Важно для Keenetic
@@ -178,11 +182,11 @@ CLI не делает DNS/WHOIS-запросов и не расширяет се
 ## Структура и аналогии с Kotlin
 
 ```text
-cmd/netcraze/main.go           точка входа, Ctrl+C, код завершения
-internal/cli/                 команды и вывод
+cmd/netCatalog/main.go         точка входа, Ctrl+C, код завершения
+internal/cli/                 команды Cobra, коды завершения и вывод
 internal/resolver/            модели, Provider, динамический каталог и объединение
-internal/iplist/              HTTP-адаптер и проверка записей
-internal/v2fly/               YAML-релиз, фильтры списков и domain-правил
+internal/providers/iplist/    HTTP-адаптер и проверка записей
+internal/providers/v2fly/     YAML-релиз, фильтры списков и domain-правил
 ```
 
 - `struct` хранит поля, как простой Kotlin-класс, но не генерирует `copy/equals` как `data class`.
@@ -200,7 +204,7 @@ internal/v2fly/               YAML-релиз, фильтры списков и 
 
 ### Добавление источника
 
-1. Создать пакет `internal/<source>` с реализацией `resolver.Provider`.
+1. Создать пакет `internal/providers/<source>` с реализацией `resolver.Provider`.
 2. Реализовать `ListServices`: обнаруживать доменные идентификаторы или именованные
    списки (`Service.Name`, если домена нет) и их привязки `Binding{Source, Key}`.
    Если источник не сообщает домен, не угадывать его по имени.
@@ -212,3 +216,16 @@ internal/v2fly/               YAML-релиз, фильтры списков и 
 
 Новый URL существующего iplist-формата задаётся через `--url`; новый формат требует
 нового адаптера. Динамических плагинов и хранения данных нет.
+
+## Тесты и документация кода
+
+- Одна функция `Test<Method><Scenario>` проверяет один метод и один сценарий.
+  Для разных условий создаются отдельные функции, без таблиц сценариев и вложенных `t.Run`.
+- Несколько assertions допустимы для одного сценария. `require` проверяет условия,
+  без которых тест не может продолжаться; `assert` — независимые ожидания.
+- Общая подготовка находится в тестовых helpers с `t.Helper()` и `t.Cleanup()`.
+  HTTP проверяется локальными серверами `httptest`, без публичных источников.
+- Экспортируемые символы и пакеты документируются в формате GoDoc:
+  комментарий перед объявлением, начиная с имени символа или `Package <name>`.
+  Комментарии описывают контракт, ошибки, ограничения и частичные результаты.
+  Документацию можно читать через `go doc ./internal/resolver` и подсказки IDE.

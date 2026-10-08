@@ -1,3 +1,5 @@
+// NetCatalog retrieves domains, IP addresses, and CIDR networks from public
+// service lists. It does not modify system routes or perform DNS lookups.
 package main
 
 import (
@@ -5,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 
-	"netcraze/internal/cli"
+	"netCatalog/internal/cli"
 )
 
 func main() {
