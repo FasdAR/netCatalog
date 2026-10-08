@@ -1,27 +1,24 @@
-// Package cli implements netCatalog commands and separates process management
-// from argument parsing, data retrieval, and output.
-package cli
+package cmd
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"io"
-
-	"netCatalog/internal/providers/v2fly"
+	"os"
 )
 
-// Run executes a command using args and writes data to stdout and diagnostics to
-// stderr. It returns 0 for successful, partial, or empty results, 1 for runtime
-// failures, and 2 for invalid arguments or unknown or ambiguous services.
-// Run does not terminate the process. Each call creates fresh command state.
-func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return run(ctx, args, stdout, stderr, v2fly.DefaultURL)
+// Execute runs the global command tree once using process arguments and streams.
+// It returns 0 for successful, partial or empty results, 1 for runtime or write
+// failures, and 2 for invalid input. It does not terminate the process.
+func Execute(ctx context.Context) int {
+	return run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 }
 
-func run(ctx context.Context, args []string, stdout, stderr io.Writer, defaultV2flyURL string) int {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	out, diagnostics := &checkedWriter{writer: stdout}, &checkedWriter{writer: stderr}
-	root := newRootCommand(defaultV2flyURL, stderr)
+	root := rootCmd
+	rootOptions.color = supportsColor(stderr)
 	root.SetArgs(args)
 	root.SetOut(out)
 	root.SetErr(diagnostics)

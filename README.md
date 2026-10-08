@@ -11,12 +11,12 @@ CLI на Go для получения доменов, IP-адресов и CIDR-
 `brew install go` либо скачать с <https://go.dev/dl/>.
 
 ```sh
-go build -o bin/netCatalog ./cmd/netCatalog
+go build -o bin/netCatalog .
 go test -race ./...
 go vet ./...
 ```
 
-Вместо сборки можно запускать `go run ./cmd/netCatalog ...`.
+Вместо сборки можно запускать `go run . ...`.
 Для команд и help используется Cobra, для определения терминала —
 `golang.org/x/term`, для разбора YAML — `gopkg.in/yaml.v3`.
 Тесты используют стандартный `testing` и Testify (`assert`/`require`).
@@ -43,7 +43,7 @@ export PATH="$PWD/bin:$PATH"
 и проверьте SHA256 по опубликованному файлу checksums.
 
 ```sh
-make fmt        # применить gofmt к cmd/ и internal/
+make fmt        # применить gofmt к main.go, cmd/ и internal/
 make fmt-check  # проверить форматирование без изменения файлов
 make lint       # запустить golangci-lint для кода и тестов
 make check      # fmt-check, затем lint; не изменяет исходники
@@ -94,7 +94,7 @@ bin/netCatalog get youtube.com --type domains
 bin/netCatalog get youtube.com --site --type domains
 
 # Собственный экземпляр iplist или другой публичный портал
-bin/netCatalog get youtube --type ips --url https://iplist.opencck.org/ --timeout 15s
+bin/netCatalog get youtube --type ips --iplist-url https://iplist.opencck.org/ --timeout 15s
 
 bin/netCatalog sources list
 bin/netCatalog --help
@@ -224,8 +224,8 @@ CLI не делает DNS/WHOIS-запросов и не расширяет се
 ## Структура и аналогии с Kotlin
 
 ```text
-cmd/netCatalog/main.go         точка входа, Ctrl+C, код завершения
-internal/cli/                 команды Cobra, коды завершения и вывод
+main.go                      единственная точка входа, Ctrl+C, код завершения
+cmd/                         команды Cobra, коды завершения и вывод
 internal/resolver/            модели, Provider, динамический каталог и объединение
 internal/providers/iplist/    HTTP-адаптер и проверка записей
 internal/providers/v2fly/     YAML-релиз, фильтры списков и domain-правил
@@ -256,8 +256,43 @@ internal/providers/v2fly/     YAML-релиз, фильтры списков и 
 4. Добавить тесты. Resolver уже объединяет результаты нескольких адаптеров,
    сохраняет источники и не смешивает `full` и `suffix` для одного домена.
 
-Новый URL существующего iplist-формата задаётся через `--url`; новый формат требует
+Новый URL существующего iplist-формата задаётся через `--iplist-url`; новый формат требует
 нового адаптера. Динамических плагинов и хранения данных нет.
+
+### Добавление команды через cobra-cli
+
+Установите генератор отдельно от зависимостей приложения:
+
+```sh
+go install github.com/spf13/cobra-cli@v1.3.0
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+`cobra-cli init` уже выполнен; повторно запускать его не нужно.
+Команды организованы по шаблону генератора: глобальные `rootCmd`, `getCmd`,
+`servicesCmd`, `sourcesCmd` и регистрация через `init()` в отдельных файлах `cmd/`.
+Создать новую команду можно из корня проекта:
+
+```sh
+cobra-cli add example --license none
+cobra-cli add exampleList -p exampleCmd --license none
+```
+
+После генерации задайте описания, `Args`, обработчик `RunE` и флаги.
+Для дочерней команды измените `Use` на `list`: `exampleList` — уникальное
+Go-имя (`exampleListCmd`), а не пользовательское имя команды.
+Это позволяет иметь `services list` и `sources list` в одном пакете без
+конфликта переменных и файлов. Имена вложенных файлов приводим к виду
+`example_list.go`. Флаг `--license none` не выбирает новую лицензию проекта.
+
+Используйте `cmd.Context()`, `cmd.OutOrStdout()` и `cmd.ErrOrStderr()`;
+обработчики возвращают ошибки, а не вызывают `os.Exit`. Коды завершения
+и ошибки записи обрабатываются централизованно в `cmd/execute.go`.
+Конфигурационные файлы и Viper не используются.
+
+В обычном процессе глобальное дерево выполняется один раз. В тестах его
+состояние сбрасывается помощником `runForTest`: значения флагов, `Changed`,
+аргументы, контекст и потоки. Тесты команд не запускаются параллельно.
 
 ## Тесты и документация кода
 

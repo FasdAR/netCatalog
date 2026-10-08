@@ -6,10 +6,10 @@ GOLANGCI_LINT_VERSION := 2.14.0
 .PHONY: fmt fmt-check lint check
 
 fmt:
-	$(GOFMT) -w cmd internal
+	$(GOFMT) -w main.go cmd internal
 
 fmt-check:
-	@files="$$($(GOFMT) -l cmd internal)" || exit $$?; \
+	@files="$$($(GOFMT) -l main.go cmd internal)" || exit $$?; \
 	if [ -n "$$files" ]; then \
 		printf '%s\n' "$$files"; \
 		printf '%s\n' "Formatting differs; run 'make fmt'." >&2; \
