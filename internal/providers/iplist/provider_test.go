@@ -26,7 +26,13 @@ func newTestProvider(t *testing.T, handler http.HandlerFunc) *Provider {
 
 func responseProvider(t *testing.T, body string) *Provider {
 	t.Helper()
-	return newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, body) })
+	return newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) { writeResponse(t, w, body) })
+}
+
+func writeResponse(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	_, err := fmt.Fprint(w, body)
+	assert.NoError(t, err)
 }
 
 func TestFetchRetainsIPv4WhenIPv6Fails(t *testing.T) {
@@ -35,7 +41,7 @@ func TestFetchRetainsIPv4WhenIPv6Fails(t *testing.T) {
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprint(w, `{"youtube.com":["1.2.3.4"]}`)
+		writeResponse(t, w, `{"youtube.com":["1.2.3.4"]}`)
 	})
 	result, err := p.Fetch(context.Background(), "youtube.com", resolver.Query{Kind: resolver.IPs, Family: resolver.All})
 	require.NoError(t, err)
@@ -49,7 +55,7 @@ func TestFetchDownloadsOnEveryCall(t *testing.T) {
 	var calls atomic.Int32
 	p := newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		fmt.Fprint(w, `{"youtube.com":["1.2.3.4"]}`)
+		writeResponse(t, w, `{"youtube.com":["1.2.3.4"]}`)
 	})
 	_, err := p.Fetch(context.Background(), "youtube.com", resolver.Query{Kind: resolver.IPs, Family: resolver.IPv4})
 	require.NoError(t, err)
@@ -75,7 +81,7 @@ func TestFetchOverridesStaleURLSelection(t *testing.T) {
 		assert.Empty(t, r.URL.Query().Get("group"))
 		assert.Empty(t, r.URL.Query().Get("site[]"))
 		assert.Empty(t, r.URL.Query().Get("group[]"))
-		fmt.Fprint(w, `{}`)
+		writeResponse(t, w, `{}`)
 	}))
 	t.Cleanup(server.Close)
 	p, err := New(server.URL+"?site=stale&data=domains&group=stale&site[]=stale&group[]=stale", server.Client())
@@ -88,7 +94,7 @@ func TestListServicesDiscoversSortedPortals(t *testing.T) {
 	p := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Empty(t, r.URL.Query().Get("data"))
 		assert.Empty(t, r.URL.Query().Get("group"))
-		fmt.Fprint(w, `{"b.com":{"group":"youtube"},"a.com":{"group":"youtube"},"telegram.org":{"group":"messengers"},"c.com":{}}`)
+		writeResponse(t, w, `{"b.com":{"group":"youtube"},"a.com":{"group":"youtube"},"telegram.org":{"group":"messengers"},"c.com":{}}`)
 	})
 	services, err := p.ListServices(context.Background())
 	require.NoError(t, err)
@@ -259,7 +265,7 @@ func TestFetchSelectsPortalForDomains(t *testing.T) {
 	p := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "youtube.com", r.URL.Query().Get("site"))
 		assert.Empty(t, r.URL.Query().Get("group"))
-		fmt.Fprint(w, `{"youtube.com":["youtube.com"]}`)
+		writeResponse(t, w, `{"youtube.com":["youtube.com"]}`)
 	})
 	result, err := p.Fetch(context.Background(), "youtube.com", resolver.Query{Kind: resolver.Domains})
 	require.NoError(t, err)

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"testing"
 
@@ -31,6 +32,25 @@ func TestWarningPrinterPrintsColoredWarnings(t *testing.T) {
 	var out bytes.Buffer
 	warningPrinter{writer: &out, enabled: true, color: true}.print([]string{"skipped record"})
 	assert.Equal(t, "\x1b[38;5;208mwarning: skipped record\x1b[0m\n", out.String())
+}
+
+type countedFailureWriter struct{ calls int }
+
+func (w *countedFailureWriter) Write([]byte) (int, error) {
+	w.calls++
+	return 0, errors.New("output unavailable")
+}
+
+func TestWarningPrinterStopsAfterPlainWriteFailure(t *testing.T) {
+	writer := &countedFailureWriter{}
+	warningPrinter{writer: writer, enabled: true}.print([]string{"first", "second"})
+	assert.Equal(t, 1, writer.calls)
+}
+
+func TestWarningPrinterStopsAfterColoredWriteFailure(t *testing.T) {
+	writer := &countedFailureWriter{}
+	warningPrinter{writer: writer, enabled: true, color: true}.print([]string{"first", "second"})
+	assert.Equal(t, 1, writer.calls)
 }
 
 func unsetEnv(t *testing.T, key string) {

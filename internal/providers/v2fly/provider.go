@@ -4,6 +4,7 @@ package v2fly
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,7 +68,7 @@ func (p *Provider) load(ctx context.Context) error {
 	return p.err
 }
 
-func (p *Provider) download(ctx context.Context) error {
+func (p *Provider) download(ctx context.Context) (err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url, nil)
 	if err != nil {
 		return err
@@ -77,7 +78,9 @@ func (p *Provider) download(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err = errors.Join(err, response.Body.Close())
+	}()
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d", response.StatusCode)
 	}
@@ -194,9 +197,10 @@ func validDomain(value string) bool {
 			return false
 		}
 		for _, c := range label {
-			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
-				return false
+			if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' {
+				continue
 			}
+			return false
 		}
 	}
 	return true

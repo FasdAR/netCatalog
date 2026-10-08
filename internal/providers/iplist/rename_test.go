@@ -2,7 +2,6 @@ package iplist
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +13,7 @@ import (
 func TestListServicesSendsProjectUserAgent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "netCatalog/0.1", r.UserAgent())
-		fmt.Fprint(w, `{}`)
+		writeResponse(t, w, `{}`)
 	}))
 	t.Cleanup(server.Close)
 	p, err := New(server.URL, server.Client())

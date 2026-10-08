@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -20,7 +19,7 @@ func TestRunGetHelpWithoutServiceDoesNotRequestHTTP(t *testing.T) {
 	var requests atomic.Int32
 	server := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
-		http.Error(w, "must not be called", 503)
+		http.Error(w, "must not be called", http.StatusServiceUnavailable)
 	})
 	result := execute(t, "get", "--help", "--url", server.URL)
 	assert.Zero(t, result.code)
@@ -37,7 +36,7 @@ func TestRunInvalidTypeDoesNotRequestHTTP(t *testing.T) {
 	var requests atomic.Int32
 	server := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
-		http.Error(w, "must not be called", 503)
+		http.Error(w, "must not be called", http.StatusServiceUnavailable)
 	})
 	assertInvalid(t, "get", "youtube", "--type", "invalid", "--url", server.URL)
 	assert.Zero(t, requests.Load())
@@ -77,7 +76,7 @@ func TestRunEmptyV2flyURLDisablesSource(t *testing.T) {
 	var downloads atomic.Int32
 	v2flyServer := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		downloads.Add(1)
-		fmt.Fprint(w, release)
+		writeResponse(t, w, release)
 	})
 	iplistServer := youtubeServer(t)
 	var out, diagnostics bytes.Buffer

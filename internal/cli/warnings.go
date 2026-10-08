@@ -23,9 +23,13 @@ func (p warningPrinter) print(warnings []string) {
 	}
 	for _, warning := range warnings {
 		if p.color {
-			fmt.Fprintf(p.writer, "%swarning: %s%s\n", orange, warning, resetColor)
+			if _, err := fmt.Fprintf(p.writer, "%swarning: %s%s\n", orange, warning, resetColor); err != nil {
+				return
+			}
 		} else {
-			fmt.Fprintln(p.writer, "warning:", warning)
+			if _, err := fmt.Fprintln(p.writer, "warning:", warning); err != nil {
+				return
+			}
 		}
 	}
 }

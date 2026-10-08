@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,7 +51,7 @@ func (*Provider) Capabilities() []resolver.DataKind {
 	return []resolver.DataKind{resolver.Domains, resolver.IPs, resolver.CIDRs}
 }
 
-func (p *Provider) request(ctx context.Context, params url.Values, target any) error {
+func (p *Provider) request(ctx context.Context, params url.Values, target any) (err error) {
 	u := *p.base
 	values := u.Query()
 	// Selection must come only from the current command, not from a base URL.
@@ -72,7 +73,9 @@ func (p *Provider) request(ctx context.Context, params url.Values, target any) e
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err = errors.Join(err, response.Body.Close())
+	}()
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d", response.StatusCode)
 	}
@@ -234,9 +237,10 @@ func validDomain(value string) bool {
 			return false
 		}
 		for _, c := range label {
-			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
-				return false
+			if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' {
+				continue
 			}
+			return false
 		}
 	}
 	return true

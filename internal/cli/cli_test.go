@@ -18,6 +18,12 @@ type commandResult struct {
 	err  string
 }
 
+func writeResponse(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	_, err := fmt.Fprint(w, body)
+	assert.NoError(t, err)
+}
+
 func execute(t *testing.T, args ...string) commandResult {
 	t.Helper()
 	var out, diagnostics bytes.Buffer
@@ -41,13 +47,13 @@ func youtubeServer(t *testing.T) *httptest.Server {
 		}
 		switch r.URL.Query().Get("data") {
 		case "domains":
-			fmt.Fprint(w, `{"youtube.com":["YouTube.com","*.youtube.com","bad domain"]}`)
+			writeResponse(t, w, `{"youtube.com":["YouTube.com","*.youtube.com","bad domain"]}`)
 		case "ip4":
-			fmt.Fprint(w, `{"youtube.com":["1.2.3.4"]}`)
+			writeResponse(t, w, `{"youtube.com":["1.2.3.4"]}`)
 		case "ip6":
-			http.Error(w, "oops", 503)
+			http.Error(w, "oops", http.StatusServiceUnavailable)
 		default:
-			fmt.Fprint(w, `{"youtube.com":{"group":"youtube"},"openai.com":{"group":"ai"}}`)
+			writeResponse(t, w, `{"youtube.com":{"group":"youtube"},"openai.com":{"group":"ai"}}`)
 		}
 	})
 }
@@ -109,13 +115,13 @@ func telegramServer(t *testing.T, dataCalls *atomic.Int32) *httptest.Server {
 	t.Helper()
 	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("data") == "" {
-			fmt.Fprint(w, `{"telegram.org":{"group":"messengers"},"telegram.org.example.com":{"group":"messengers"},"whatsapp.com":{"group":"messengers"}}`)
+			writeResponse(t, w, `{"telegram.org":{"group":"messengers"},"telegram.org.example.com":{"group":"messengers"},"whatsapp.com":{"group":"messengers"}}`)
 			return
 		}
 		dataCalls.Add(1)
 		assert.Equal(t, "telegram.org", r.URL.Query().Get("site"))
 		assert.Empty(t, r.URL.Query().Get("group"))
-		fmt.Fprint(w, `{"telegram.org":["192.0.2.1"]}`)
+		writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
 	})
 }
 
@@ -166,10 +172,10 @@ func failedCatalogueServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("data") == "" {
-			http.Error(w, "catalogue unavailable", 503)
+			http.Error(w, "catalogue unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprint(w, `{"telegram.org":["192.0.2.1"]}`)
+		writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
 	})
 }
 
@@ -259,14 +265,14 @@ func discordServer(t *testing.T, calls chan string) *httptest.Server {
 	t.Helper()
 	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("data") == "" {
-			fmt.Fprint(w, `{"discord.com":{},"discord.gg":{},"discord.media":{},"discord-tools.com":{},"notdiscord.com":{}}`)
+			writeResponse(t, w, `{"discord.com":{},"discord.gg":{},"discord.media":{},"discord-tools.com":{},"notdiscord.com":{}}`)
 			return
 		}
 		site := r.URL.Query().Get("site")
 		calls <- site
 		assert.Empty(t, r.URL.Query().Get("group"))
 		if site == "discord.media" {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		values := map[string]map[string]string{
@@ -276,7 +282,7 @@ func discordServer(t *testing.T, calls chan string) *httptest.Server {
 		}
 		value := values[r.URL.Query().Get("data")][site]
 		assert.NotEmpty(t, value)
-		fmt.Fprintf(w, `{%q:[%q,%q]}`, site, value, value)
+		writeResponse(t, w, fmt.Sprintf(`{%q:[%q,%q]}`, site, value, value))
 	})
 }
 
@@ -327,13 +333,13 @@ func warningServer(t *testing.T) *httptest.Server {
 	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("data") {
 		case "":
-			fmt.Fprint(w, `{"telegram.org":{},"invalid@key":{}}`)
+			writeResponse(t, w, `{"telegram.org":{},"invalid@key":{}}`)
 		case "domains":
-			fmt.Fprint(w, `{"telegram.org":["telegram.org","bad domain"]}`)
+			writeResponse(t, w, `{"telegram.org":["telegram.org","bad domain"]}`)
 		case "ip4":
-			fmt.Fprint(w, `{"telegram.org":["192.0.2.1"]}`)
+			writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
 		case "ip6":
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		}
 	})
 }
@@ -382,7 +388,9 @@ func TestRunSearchWarningsEnabledByInfo(t *testing.T) {
 }
 
 func TestRunSiteFailureAlwaysReportsError(t *testing.T) {
-	server := testServer(t, func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "unavailable", 503) })
+	server := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	})
 	result := execute(t, "get", "telegram.org", "--site", "--type", "domains", "--url", server.URL)
 	assert.Equal(t, 1, result.code)
 	assert.Empty(t, result.out)
@@ -410,25 +418,25 @@ func combinedSources(t *testing.T, iplistDown, v2flyDown bool, downloads *atomic
 	v2flyServer := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		downloads.Add(1)
 		if v2flyDown {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprint(w, release)
+		writeResponse(t, w, release)
 	})
 	iplistServer := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if iplistDown {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if r.URL.Query().Get("data") == "" {
-			fmt.Fprint(w, `{"discord.com":{},"discord.gg":{}}`)
+			writeResponse(t, w, `{"discord.com":{},"discord.gg":{}}`)
 			return
 		}
 		if r.URL.Query().Get("site") == "discord.gg" {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprint(w, `{"discord.com":["shared.com"]}`)
+		writeResponse(t, w, `{"discord.com":["shared.com"]}`)
 	})
 	return iplistServer, v2flyServer
 }
@@ -466,18 +474,18 @@ func assertV2flyNotRequested(t *testing.T, command ...string) {
 	var downloads atomic.Int32
 	v2flyServer := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		downloads.Add(1)
-		http.Error(w, "must not be called", 503)
+		http.Error(w, "must not be called", http.StatusServiceUnavailable)
 	})
 	iplistServer := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("data") {
 		case "":
-			fmt.Fprint(w, `{"telegram.org":{}}`)
+			writeResponse(t, w, `{"telegram.org":{}}`)
 		case "ip4":
-			fmt.Fprint(w, `{"telegram.org":["192.0.2.1"]}`)
+			writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
 		case "cidr4":
-			fmt.Fprint(w, `{"telegram.org":["192.0.2.0/24"]}`)
+			writeResponse(t, w, `{"telegram.org":["192.0.2.0/24"]}`)
 		case "domains":
-			fmt.Fprint(w, `{"telegram.org":["telegram.org"]}`)
+			writeResponse(t, w, `{"telegram.org":["telegram.org"]}`)
 		}
 	})
 	args := append(command, "--url", iplistServer.URL, "--v2fly-url", v2flyServer.URL)
@@ -501,9 +509,9 @@ func TestRunSiteDoesNotContactV2fly(t *testing.T) {
 func TestRunSearchCombinedCatalogue(t *testing.T) {
 	server := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/release" {
-			fmt.Fprint(w, "lists:\n  - name: telegram\n    length: 1\n    rules: [\"domain:telegram.org\"]\n  - name: categoryall\n    length: 0\n    rules: []\n")
+			writeResponse(t, w, "lists:\n  - name: telegram\n    length: 1\n    rules: [\"domain:telegram.org\"]\n  - name: categoryall\n    length: 0\n    rules: []\n")
 		} else {
-			fmt.Fprint(w, `{"telegram.org":{}}`)
+			writeResponse(t, w, `{"telegram.org":{}}`)
 		}
 	})
 	result := execute(t, "services", "search", "telegram", "--url", server.URL, "--v2fly-url", server.URL+"/release")

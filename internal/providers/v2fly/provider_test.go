@@ -46,7 +46,13 @@ func newTestProvider(t *testing.T, handler http.HandlerFunc) *Provider {
 
 func responseProvider(t *testing.T, body string) *Provider {
 	t.Helper()
-	return newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, body) })
+	return newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) { writeResponse(t, w, body) })
+}
+
+func writeResponse(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	_, err := fmt.Fprint(w, body)
+	assert.NoError(t, err)
 }
 
 func TestListServicesDiscoversNamedLists(t *testing.T) {
@@ -72,7 +78,7 @@ func TestFetchReusesReleaseWithinProvider(t *testing.T) {
 	var downloads atomic.Int32
 	p := newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) {
 		downloads.Add(1)
-		fmt.Fprint(w, fixture)
+		writeResponse(t, w, fixture)
 	})
 	_, err := p.Fetch(context.Background(), "discord", resolver.Query{Kind: resolver.Domains})
 	require.NoError(t, err)
@@ -85,7 +91,7 @@ func TestListServicesDownloadsForEachProviderInstance(t *testing.T) {
 	var downloads atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		downloads.Add(1)
-		fmt.Fprint(w, fixture)
+		writeResponse(t, w, fixture)
 	}))
 	t.Cleanup(server.Close)
 	first, err := New(server.URL, server.Client())
@@ -148,7 +154,9 @@ func TestListServicesRejectsDuplicateNames(t *testing.T) {
 }
 
 func TestListServicesReportsHTTPFailure(t *testing.T) {
-	p := newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "unavailable", 503) })
+	p := newTestProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	})
 	_, err := p.ListServices(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "503")

@@ -11,6 +11,7 @@ import (
 // DataKind identifies the requested category of network records.
 type DataKind string
 
+// Supported categories of network records.
 const (
 	Domains DataKind = "domains" // Domain rules.
 	IPs     DataKind = "ips"     // Individual IP addresses.
@@ -20,6 +21,7 @@ const (
 // Family selects IP versions for IP and CIDR queries; it is ignored for domains.
 type Family string
 
+// Supported address-family selections.
 const (
 	IPv4 Family = "ipv4" // IPv4 only.
 	IPv6 Family = "ipv6" // IPv6 only.

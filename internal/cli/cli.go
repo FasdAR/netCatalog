@@ -29,7 +29,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, defaultV2
 	// Cobra's help renderer does not return write errors, so check the streams
 	// as well as ExecuteContext. Redirected output must not report success if lost.
 	if out.err != nil {
-		fmt.Fprintln(diagnostics, "error:", out.err)
+		if _, err := fmt.Fprintln(diagnostics, "error:", out.err); err != nil {
+			return 1
+		}
 		return 1
 	}
 	if diagnostics.err != nil {
@@ -43,8 +45,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, defaultV2
 	if errors.As(err, &failure) {
 		code = failure.code
 	}
-	fmt.Fprintln(diagnostics, "error:", err)
-	if diagnostics.err != nil {
+	if _, err := fmt.Fprintln(diagnostics, "error:", err); err != nil {
 		return 1
 	}
 	return code
