@@ -183,3 +183,41 @@ func TestRunUpdateReplacesSelectedURL(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, after)
 }
+
+func assertBadV2flyPreservesSnapshot(t *testing.T, payload string) {
+	t.Helper()
+	dir := t.TempDir()
+	seedSnapshot(t, dir, "v2fly", release)
+	before, err := os.ReadFile(filepath.Join(dir, "v2fly.snapshot"))
+	require.NoError(t, err)
+	r := execute(t, "update", "--source", "v2fly", "--data-dir", dir, "--v2fly-url", payloadServer(t, payload, nil))
+	assert.Equal(t, 1, r.code)
+	assert.Contains(t, r.err, "v2fly")
+	after, err := os.ReadFile(filepath.Join(dir, "v2fly.snapshot"))
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
+func TestRunUpdateRejectsMissingV2flyFields(t *testing.T) {
+	assertBadV2flyPreservesSnapshot(t, `lists: [{name: discord}]`)
+}
+
+func TestRunUpdateRejectsNullV2flyRules(t *testing.T) {
+	assertBadV2flyPreservesSnapshot(t, `lists: [{name: discord, length: 0, rules: null}]`)
+}
+
+func TestRunUpdateRejectsNumericV2flyRules(t *testing.T) {
+	assertBadV2flyPreservesSnapshot(t, `lists: [{name: discord, length: 1, rules: [123]}]`)
+}
+
+func TestRunUpdateRejectsMissingV2flyLength(t *testing.T) {
+	assertBadV2flyPreservesSnapshot(t, `lists: [{name: discord, rules: []}]`)
+}
+
+func TestRunUpdateRejectsMalformedExcludedV2flyList(t *testing.T) {
+	assertBadV2flyPreservesSnapshot(t, `lists: [{name: categoryall, length: 999, rules: []}]`)
+}
+
+func TestRunUpdateRejectsDuplicateExcludedV2flyNames(t *testing.T) {
+	assertBadV2flyPreservesSnapshot(t, `lists: [{name: categoryall, length: 0, rules: []}, {name: categoryall, length: 0, rules: []}]`)
+}

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -102,6 +103,7 @@ func Read(dir, source string) (snapshot Snapshot, err error) {
 // Write publishes a snapshot using a temporary file and an atomic replacement.
 // Failure before publication leaves the old snapshot unchanged. Callers must
 // validate the payload's source schema before calling Write.
+// Non-Unix publication is rejected because os.Rename does not guarantee atomicity.
 func Write(ctx context.Context, dir string, snapshot Snapshot) (err error) {
 	limit, err := sourceLimit(snapshot.Metadata.Source)
 	if err != nil {
@@ -156,5 +158,14 @@ func Write(ctx context.Context, dir string, snapshot Snapshot) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), filepath.Join(dir, snapshot.Metadata.Source+".snapshot"))
+	return publishSnapshot(runtime.GOOS, f.Name(), filepath.Join(dir, snapshot.Metadata.Source+".snapshot"))
+}
+
+func publishSnapshot(goos, oldPath, newPath string) error {
+	switch goos {
+	case "aix", "android", "darwin", "dragonfly", "freebsd", "illumos", "ios", "linux", "netbsd", "openbsd", "solaris":
+		return os.Rename(oldPath, newPath)
+	default:
+		return fmt.Errorf("atomic snapshot publication is not supported on %s; previous snapshot unchanged", goos)
+	}
 }

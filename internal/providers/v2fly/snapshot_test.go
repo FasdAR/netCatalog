@@ -69,3 +69,22 @@ func TestSnapshotListServicesHonorsCancellation(t *testing.T) {
 	_, err := snapshotProvider(t).ListServices(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestNewSnapshotAcceptsExplicitEmptyRules(t *testing.T) {
+	p, err := NewSnapshot([]byte(`lists: [{name: discord, length: 0, rules: []}]`))
+	require.NoError(t, err)
+	r, err := p.Fetch(context.Background(), "discord", resolver.Query{Kind: resolver.Domains})
+	require.NoError(t, err)
+	assert.Equal(t, 1, r.Succeeded)
+	assert.Empty(t, r.Entries)
+}
+
+func TestNewSnapshotRejectsExcludedLengthMismatch(t *testing.T) {
+	_, err := NewSnapshot([]byte(`lists: [{name: categoryall, length: 999, rules: []}]`))
+	require.Error(t, err)
+}
+
+func TestNewSnapshotRejectsDuplicateExcludedNames(t *testing.T) {
+	_, err := NewSnapshot([]byte(`lists: [{name: categoryall, length: 0, rules: []}, {name: categoryall, length: 0, rules: []}]`))
+	require.Error(t, err)
+}

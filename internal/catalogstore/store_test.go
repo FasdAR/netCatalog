@@ -152,3 +152,30 @@ func TestReadRejectsOversizedPayload(t *testing.T) {
 	_, err := Read(dir, "iplist")
 	require.Error(t, err)
 }
+
+func TestPublishRejectsWindowsWithoutChangingFiles(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "new.tmp")
+	newPath := filepath.Join(dir, "iplist.snapshot")
+	require.NoError(t, os.WriteFile(oldPath, []byte("new"), 0600))
+	require.NoError(t, os.WriteFile(newPath, []byte("old"), 0600))
+	require.ErrorContains(t, publishSnapshot("windows", oldPath, newPath), "atomic")
+	got, err := os.ReadFile(newPath)
+	require.NoError(t, err)
+	assert.Equal(t, "old", string(got))
+	got, err = os.ReadFile(oldPath)
+	require.NoError(t, err)
+	assert.Equal(t, "new", string(got))
+}
+
+func TestPublishAtomicallyReplacesUnixSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "new.tmp")
+	newPath := filepath.Join(dir, "iplist.snapshot")
+	require.NoError(t, os.WriteFile(oldPath, []byte("new"), 0600))
+	require.NoError(t, os.WriteFile(newPath, []byte("old"), 0600))
+	require.NoError(t, publishSnapshot("linux", oldPath, newPath))
+	got, err := os.ReadFile(newPath)
+	require.NoError(t, err)
+	assert.Equal(t, "new", string(got))
+}

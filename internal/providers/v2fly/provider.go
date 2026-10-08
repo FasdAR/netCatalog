@@ -97,7 +97,11 @@ func (p *Provider) download(ctx context.Context) (err error) {
 
 func parseLists(body []byte) (map[string]list, error) {
 	var document struct {
-		Lists []list `yaml:"lists"`
+		Lists []struct {
+			Name   yaml.Node `yaml:"name"`
+			Length yaml.Node `yaml:"length"`
+			Rules  yaml.Node `yaml:"rules"`
+		} `yaml:"lists"`
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(body))
 	decoder.KnownFields(true)
@@ -112,19 +116,38 @@ func parseLists(body []byte) (map[string]list, error) {
 		return nil, fmt.Errorf("release YAML is missing lists")
 	}
 	lists := make(map[string]list)
-	for _, item := range document.Lists {
-		name := strings.ToLower(strings.TrimSpace(item.Name))
-		if strings.HasPrefix(name, "category") || strings.Contains(name, "-") {
-			continue
+	seen := make(map[string]bool)
+	for _, raw := range document.Lists {
+		if raw.Name.Kind != yaml.ScalarNode || raw.Name.Tag != "!!str" ||
+			raw.Length.Kind != yaml.ScalarNode || raw.Length.Tag != "!!int" ||
+			raw.Rules.Kind != yaml.SequenceNode || raw.Rules.Tag != "!!seq" {
+			return nil, fmt.Errorf("each list requires a string name, integer length and rules array")
 		}
+		for _, rule := range raw.Rules.Content {
+			if rule.Kind != yaml.ScalarNode || rule.Tag != "!!str" {
+				return nil, fmt.Errorf("list %q has a non-string rule", raw.Name.Value)
+			}
+		}
+		item := list{Name: raw.Name.Value}
+		if err := raw.Length.Decode(&item.Length); err != nil {
+			return nil, fmt.Errorf("invalid list length: %w", err)
+		}
+		if err := raw.Rules.Decode(&item.Rules); err != nil {
+			return nil, fmt.Errorf("invalid list rules: %w", err)
+		}
+		name := strings.ToLower(strings.TrimSpace(item.Name))
 		if name == "" || strings.ContainsAny(name, " \t\r\n:/@") {
 			return nil, fmt.Errorf("invalid list name %q", item.Name)
 		}
-		if _, exists := lists[name]; exists {
+		if seen[name] {
 			return nil, fmt.Errorf("duplicate list %q", name)
 		}
 		if item.Length != len(item.Rules) {
 			return nil, fmt.Errorf("list %q has inconsistent length", name)
+		}
+		seen[name] = true
+		if strings.HasPrefix(name, "category") || strings.Contains(name, "-") {
+			continue
 		}
 		lists[name] = item
 	}
