@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,183 +32,125 @@ func execute(t *testing.T, args ...string) commandResult {
 
 func testServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-	return server
+	s := httptest.NewServer(handler)
+	t.Cleanup(s.Close)
+	return s
 }
 
-func youtubeServer(t *testing.T) *httptest.Server {
+func fixtureDir(t *testing.T, iplist, v2fly string) string {
 	t.Helper()
-	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Empty(t, r.URL.Query().Get("group"))
-		if r.URL.Query().Get("data") != "" {
-			assert.Equal(t, "youtube.com", r.URL.Query().Get("site"))
-		}
-		switch r.URL.Query().Get("data") {
-		case "domains":
-			writeResponse(t, w, `{"youtube.com":["YouTube.com","*.youtube.com","bad domain"]}`)
-		case "ip4":
-			writeResponse(t, w, `{"youtube.com":["1.2.3.4"]}`)
-		case "ip6":
-			http.Error(w, "oops", http.StatusServiceUnavailable)
-		default:
-			writeResponse(t, w, `{"youtube.com":{"group":"youtube"},"openai.com":{"group":"ai"}}`)
-		}
-	})
+	dir := t.TempDir()
+	if iplist != "" {
+		seedSnapshot(t, dir, "iplist", iplist)
+	}
+	if v2fly != "" {
+		seedSnapshot(t, dir, "v2fly", v2fly)
+	}
+	return dir
 }
+
+func executeCatalog(t *testing.T, payload string, args ...string) commandResult {
+	t.Helper()
+	return execute(t, append(args, "--data-dir", fixtureDir(t, payload, ""))...)
+}
+
+const youtubeFixture = `{"youtube.com":{"group":"youtube","domains":["YouTube.com","*.youtube.com","bad domain"],"ip4":["1.2.3.4","invalid"],"ip6":[],"cidr4":[],"cidr6":[]},"openai.com":{"group":"ai","domains":[],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]}}`
+const telegramFixture = `{"telegram.org":{"group":"messengers","domains":["telegram.org"],"ip4":["192.0.2.1"],"ip6":[],"cidr4":["192.0.2.0/24"],"cidr6":[]},"telegram.org.example.com":{"group":"messengers","domains":[],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]},"whatsapp.com":{"group":"messengers","domains":[],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]}}`
+const warningFixture = `{"telegram.org":{"domains":["telegram.org","bad domain"],"ip4":["192.0.2.1","invalid"],"ip6":[],"cidr4":[],"cidr6":[]},"invalid@key":{}}`
+const discordFixture = `{"discord.com":{"domains":["cdn.discord.com","cdn.discord.com"],"ip4":["192.0.2.1","192.0.2.1"],"ip6":[],"cidr4":["192.0.2.0/24"],"cidr6":[]},"discord.gg":{"domains":["discord.gg"],"ip4":["192.0.2.2"],"ip6":[],"cidr4":["198.51.100.0/24"],"cidr6":[]},"discord.media":{"domains":[],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]},"discord-tools.com":{"domains":["unrelated.org"],"ip4":["203.0.113.1"],"ip6":[],"cidr4":["203.0.113.0/24"],"cidr6":[]},"notdiscord.com":{"domains":["unrelated.net"],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]}}`
+const sharedFixture = `{"discord.com":{"domains":["shared.com"],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]},"discord.gg":{"domains":[],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]}}`
+const release = `lists:
+  - name: discord
+    length: 4
+    rules: ["domain:shared.com", "domain:cdn.discord.com:@cn", "full:ignored.discord.com", "keyword:discord"]
+  - name: standalone
+    length: 1
+    rules: ["domain:standalone.org"]
+  - name: categorymessengers
+    length: 1
+    rules: ["domain:excluded.com"]
+  - name: discord-extra
+    length: 1
+    rules: ["domain:excluded.net"]
+`
 
 func TestRunGetDomains(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "get", "youtube", "--type", "domains", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{code: 0, out: "youtube.com\n"}, result)
+	assert.Equal(t, commandResult{out: "youtube.com\n"}, executeCatalog(t, youtubeFixture, "get", "youtube", "--type", "domains"))
 }
-
 func TestRunGetPartialIPs(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "get", "youtube", "--type", "ips", "--family", "all", "--info", "--iplist-url", server.URL)
-	assert.Zero(t, result.code)
-	assert.Equal(t, "1.2.3.4\n", result.out)
-	assert.Contains(t, result.err, "503")
+	r := executeCatalog(t, youtubeFixture, "get", "youtube", "--type", "ips", "--family", "all", "--info")
+	assert.Zero(t, r.code)
+	assert.Equal(t, "1.2.3.4\n", r.out)
+	assert.Contains(t, r.err, "invalid records")
 }
-
-func TestRunGetFailedIPv6(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "get", "youtube", "--type", "ips", "--family", "ipv6", "--iplist-url", server.URL)
-	assert.Equal(t, 1, result.code)
-	assert.Empty(t, result.out)
-	assert.Contains(t, result.err, "error:")
-	assert.NotContains(t, result.err, "warning:")
+func TestRunGetEmptyIPv6Succeeds(t *testing.T) {
+	assert.Equal(t, commandResult{}, executeCatalog(t, youtubeFixture, "get", "youtube", "--type", "ips", "--family", "ipv6"))
 }
-
 func TestRunServicesList(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "services", "list", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, result)
+	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
 }
-
 func TestRunServicesSearchNormalizesCase(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "services", "search", "OPENAI", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "openai.com\n"}, result)
+	assert.Equal(t, commandResult{out: "openai.com\n"}, executeCatalog(t, youtubeFixture, "services", "search", "OPENAI"))
 }
-
 func TestRunServicesSearchMissingTerm(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "services", "search", "missing", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{}, result)
+	assert.Equal(t, commandResult{}, executeCatalog(t, youtubeFixture, "services", "search", "missing"))
 }
-
 func TestRunGetExactDomain(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "get", "youtube.com", "--type", "domains", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "youtube.com\n"}, result)
+	assert.Equal(t, commandResult{out: "youtube.com\n"}, executeCatalog(t, youtubeFixture, "get", "youtube.com", "--type", "domains"))
 }
-
 func TestRunGetSite(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "get", "youtube.com", "--site", "--type", "domains", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "youtube.com\n"}, result)
+	assert.Equal(t, commandResult{out: "youtube.com\n"}, executeCatalog(t, youtubeFixture, "get", "youtube.com", "--site", "--type", "domains"))
 }
-
-func telegramServer(t *testing.T, dataCalls *atomic.Int32) *httptest.Server {
-	t.Helper()
-	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("data") == "" {
-			writeResponse(t, w, `{"telegram.org":{"group":"messengers"},"telegram.org.example.com":{"group":"messengers"},"whatsapp.com":{"group":"messengers"}}`)
-			return
-		}
-		dataCalls.Add(1)
-		assert.Equal(t, "telegram.org", r.URL.Query().Get("site"))
-		assert.Empty(t, r.URL.Query().Get("group"))
-		writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
-	})
-}
-
 func TestRunSearchShowsSeparatePortals(t *testing.T) {
-	var calls atomic.Int32
-	server := telegramServer(t, &calls)
-	result := execute(t, "services", "search", "telegram", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "telegram.org\ntelegram.org.example.com\n"}, result)
-	assert.Zero(t, calls.Load())
+	assert.Equal(t, commandResult{out: "telegram.org\ntelegram.org.example.com\n"}, executeCatalog(t, telegramFixture, "services", "search", "telegram"))
 }
-
 func TestRunSearchIgnoresSourceGroups(t *testing.T) {
-	var calls atomic.Int32
-	server := telegramServer(t, &calls)
-	result := execute(t, "services", "search", "messengers", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{}, result)
-	assert.Zero(t, calls.Load())
+	assert.Equal(t, commandResult{}, executeCatalog(t, telegramFixture, "services", "search", "messengers"))
 }
-
 func TestRunGetAmbiguousServiceDoesNotFetchData(t *testing.T) {
-	var calls atomic.Int32
-	server := telegramServer(t, &calls)
-	result := execute(t, "get", "tele", "--type", "ips", "--iplist-url", server.URL)
-	assert.Equal(t, 2, result.code)
-	assert.Empty(t, result.out)
-	assert.Contains(t, result.err, "ambiguous")
-	assert.Zero(t, calls.Load())
+	tr := forbidHTTP(t)
+	r := executeCatalog(t, telegramFixture, "get", "tele", "--type", "ips")
+	assert.Equal(t, 2, r.code)
+	assert.Empty(t, r.out)
+	assert.Contains(t, r.err, "ambiguous")
+	assert.Zero(t, tr.calls.Load())
 }
-
-func TestRunGetExactServiceFetchesOnce(t *testing.T) {
-	var calls atomic.Int32
-	server := telegramServer(t, &calls)
-	result := execute(t, "get", "telegram.org", "--type", "ips", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "192.0.2.1\n"}, result)
-	assert.Equal(t, int32(1), calls.Load())
+func TestRunGetExactServiceDoesNotBroaden(t *testing.T) {
+	assert.Equal(t, commandResult{out: "192.0.2.1\n"}, executeCatalog(t, telegramFixture, "get", "telegram.org", "--type", "ips"))
 }
-
 func TestRunGetMissingServiceDoesNotFetchData(t *testing.T) {
-	var calls atomic.Int32
-	server := telegramServer(t, &calls)
-	result := execute(t, "get", "missing", "--type", "ips", "--iplist-url", server.URL)
-	assert.Equal(t, 2, result.code)
-	assert.Contains(t, result.err, "no portal matching")
-	assert.Zero(t, calls.Load())
+	tr := forbidHTTP(t)
+	r := executeCatalog(t, telegramFixture, "get", "missing", "--type", "ips")
+	assert.Equal(t, 2, r.code)
+	assert.Contains(t, r.err, "no portal matching")
+	assert.Zero(t, tr.calls.Load())
 }
-
-func failedCatalogueServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("data") == "" {
-			http.Error(w, "catalogue unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
-	})
-}
-
 func TestRunListReportsCatalogueFailure(t *testing.T) {
-	server := failedCatalogueServer(t)
-	result := execute(t, "services", "list", "--iplist-url", server.URL)
-	assert.Equal(t, 1, result.code)
-	assert.Empty(t, result.out)
-	assert.Contains(t, result.err, "error:")
-	assert.NotContains(t, result.err, "warning:")
+	r := execute(t, "services", "list")
+	assert.Equal(t, 1, r.code)
+	assert.Empty(t, r.out)
+	assert.Contains(t, r.err, "netCatalog update")
+	assert.NotContains(t, r.err, "warning:")
 }
-
 func TestRunGetReportsCatalogueFailure(t *testing.T) {
-	server := failedCatalogueServer(t)
-	result := execute(t, "get", "telegram", "--type", "ips", "--iplist-url", server.URL)
-	assert.Equal(t, 1, result.code)
-	assert.Empty(t, result.out)
-	assert.Contains(t, result.err, "catalogue")
+	r := execute(t, "get", "telegram", "--type", "ips")
+	assert.Equal(t, 1, r.code)
+	assert.Empty(t, r.out)
+	assert.Contains(t, r.err, "catalogue")
 }
-
-func TestRunSiteBypassesFailedCatalogue(t *testing.T) {
-	server := failedCatalogueServer(t)
-	result := execute(t, "get", "telegram.org", "--site", "--type", "ips", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "192.0.2.1\n"}, result)
+func TestRunSiteRequiresLocalSnapshot(t *testing.T) {
+	r := execute(t, "get", "telegram.org", "--site", "--type", "ips")
+	assert.Equal(t, 1, r.code)
+	assert.Contains(t, r.err, "netCatalog update --source iplist")
 }
 
 func assertInvalid(t *testing.T, args ...string) {
 	t.Helper()
-	result := execute(t, args...)
-	assert.Equal(t, 2, result.code)
-	assert.Empty(t, result.out)
-	assert.NotEmpty(t, result.err)
+	r := execute(t, args...)
+	assert.Equal(t, 2, r.code)
+	assert.Empty(t, r.out)
+	assert.NotEmpty(t, r.err)
 }
-
 func TestRunRejectsMissingService(t *testing.T) { assertInvalid(t, "get") }
 func TestRunRejectsMissingType(t *testing.T)    { assertInvalid(t, "get", "youtube") }
 func TestRunRejectsUnknownType(t *testing.T)    { assertInvalid(t, "get", "youtube", "--type", "bad") }
@@ -219,11 +160,9 @@ func TestRunRejectsFamilyForDomains(t *testing.T) {
 func TestRunRejectsUnknownFamily(t *testing.T) {
 	assertInvalid(t, "get", "youtube", "--type", "ips", "--family", "bad")
 }
-func TestRunRejectsZeroTimeout(t *testing.T) {
-	assertInvalid(t, "get", "youtube", "--type", "ips", "--timeout", "0")
-}
+func TestRunRejectsZeroTimeout(t *testing.T) { assertInvalid(t, "update", "--timeout", "0s") }
 func TestRunRejectsInvalidURL(t *testing.T) {
-	assertInvalid(t, "get", "youtube", "--type", "ips", "--iplist-url", "://bad")
+	assertInvalid(t, "update", "--source", "iplist", "--iplist-url", "://bad")
 }
 func TestRunRejectsGetJSONFormat(t *testing.T) {
 	assertInvalid(t, "get", "youtube", "--type", "ips", "--format", "json")
@@ -242,66 +181,26 @@ func TestRunRejectsExtraGetArgument(t *testing.T) {
 func TestRunRejectsMissingSearchTerm(t *testing.T)      { assertInvalid(t, "services", "search") }
 func TestRunRejectsUnknownServicesCommand(t *testing.T) { assertInvalid(t, "services", "bad") }
 func TestRunRejectsUnknownCommand(t *testing.T)         { assertInvalid(t, "unknown") }
-
 func TestRunNoArgumentsShowsHelp(t *testing.T) {
-	result := execute(t)
-	assert.Zero(t, result.code)
-	assert.Contains(t, result.out, "netCatalog")
-	assert.Empty(t, result.err)
+	r := execute(t)
+	assert.Zero(t, r.code)
+	assert.Contains(t, r.out, "netCatalog")
+	assert.Empty(t, r.err)
 }
-
 func TestRunSourcesList(t *testing.T) {
-	result := execute(t, "sources", "list")
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, result)
+	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, execute(t, "sources", "list"))
 }
-
 func TestRunGetHelpWithService(t *testing.T) {
-	result := execute(t, "get", "youtube", "--help")
-	assert.Zero(t, result.code)
-	assert.NotContains(t, result.out+result.err, "--format")
-}
-
-func discordServer(t *testing.T, calls chan string) *httptest.Server {
-	t.Helper()
-	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("data") == "" {
-			writeResponse(t, w, `{"discord.com":{},"discord.gg":{},"discord.media":{},"discord-tools.com":{},"notdiscord.com":{}}`)
-			return
-		}
-		site := r.URL.Query().Get("site")
-		calls <- site
-		assert.Empty(t, r.URL.Query().Get("group"))
-		if site == "discord.media" {
-			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		values := map[string]map[string]string{
-			"domains": {"discord.com": "cdn.discord.com", "discord.gg": "discord.gg"},
-			"ip4":     {"discord.com": "192.0.2.1", "discord.gg": "192.0.2.2"},
-			"cidr4":   {"discord.com": "192.0.2.0/24", "discord.gg": "198.51.100.0/24"},
-		}
-		value := values[r.URL.Query().Get("data")][site]
-		assert.NotEmpty(t, value)
-		writeResponse(t, w, fmt.Sprintf(`{%q:[%q,%q]}`, site, value, value))
-	})
+	r := execute(t, "get", "youtube", "--help")
+	assert.Zero(t, r.code)
+	assert.NotContains(t, r.out+r.err, "--format")
 }
 
 func assertCombinedDiscord(t *testing.T, kind, want string) {
 	t.Helper()
-	calls := make(chan string, 10)
-	server := discordServer(t, calls)
-	result := execute(t, "get", "discord", "--type", kind, "--info", "--iplist-url", server.URL)
-	assert.Zero(t, result.code)
-	assert.Equal(t, want, result.out)
-	assert.Contains(t, result.err, "503")
-	assert.Len(t, calls, 3)
-	if len(calls) == 3 {
-		assert.Equal(t, "discord.com", <-calls)
-		assert.Equal(t, "discord.gg", <-calls)
-		assert.Equal(t, "discord.media", <-calls)
-	}
+	r := executeCatalog(t, discordFixture, "get", "discord", "--type", kind)
+	assert.Equal(t, commandResult{out: want}, r)
 }
-
 func TestRunCombinesDiscordDomains(t *testing.T) {
 	assertCombinedDiscord(t, "domains", "cdn.discord.com\ndiscord.gg\n")
 }
@@ -311,57 +210,33 @@ func TestRunCombinesDiscordIPs(t *testing.T) {
 func TestRunCombinesDiscordCIDRs(t *testing.T) {
 	assertCombinedDiscord(t, "cidrs", "192.0.2.0/24\n198.51.100.0/24\n")
 }
-
-func assertExactDiscord(t *testing.T, kind string) {
+func assertExactDiscord(t *testing.T, kind, want string) {
 	t.Helper()
-	calls := make(chan string, 10)
-	server := discordServer(t, calls)
-	result := execute(t, "get", "discord.com", "--type", kind, "--iplist-url", server.URL)
-	assert.Zero(t, result.code)
-	assert.Len(t, calls, 1)
-	if len(calls) == 1 {
-		assert.Equal(t, "discord.com", <-calls)
-	}
+	assert.Equal(t, commandResult{out: want}, executeCatalog(t, discordFixture, "get", "discord.com", "--type", kind))
+}
+func TestRunExactDiscordDomainsDoesNotBroaden(t *testing.T) {
+	assertExactDiscord(t, "domains", "cdn.discord.com\n")
+}
+func TestRunExactDiscordIPsDoesNotBroaden(t *testing.T) { assertExactDiscord(t, "ips", "192.0.2.1\n") }
+func TestRunExactDiscordCIDRsDoesNotBroaden(t *testing.T) {
+	assertExactDiscord(t, "cidrs", "192.0.2.0/24\n")
 }
 
-func TestRunExactDiscordDomainsDoesNotBroaden(t *testing.T) { assertExactDiscord(t, "domains") }
-func TestRunExactDiscordIPsDoesNotBroaden(t *testing.T)     { assertExactDiscord(t, "ips") }
-func TestRunExactDiscordCIDRsDoesNotBroaden(t *testing.T)   { assertExactDiscord(t, "cidrs") }
-
-func warningServer(t *testing.T) *httptest.Server {
+func assertWarningOutput(t *testing.T, want string, info bool, args ...string) {
 	t.Helper()
-	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Query().Get("data") {
-		case "":
-			writeResponse(t, w, `{"telegram.org":{},"invalid@key":{}}`)
-		case "domains":
-			writeResponse(t, w, `{"telegram.org":["telegram.org","bad domain"]}`)
-		case "ip4":
-			writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
-		case "ip6":
-			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-		}
-	})
-}
-
-func assertWarningOutput(t *testing.T, want string, info bool, command ...string) {
-	t.Helper()
-	server := warningServer(t)
-	args := append(command, "--iplist-url", server.URL)
 	if info {
 		args = append(args, "--info")
 	}
-	result := execute(t, args...)
-	assert.Zero(t, result.code)
-	assert.Equal(t, want, result.out)
+	r := executeCatalog(t, warningFixture, args...)
+	assert.Zero(t, r.code)
+	assert.Equal(t, want, r.out)
 	if info {
-		assert.Contains(t, result.err, "warning:")
-		assert.NotContains(t, result.err, "\x1b")
+		assert.Contains(t, r.err, "warning:")
+		assert.NotContains(t, r.err, "\x1b")
 	} else {
-		assert.Empty(t, result.err)
+		assert.Empty(t, r.err)
 	}
 }
-
 func TestRunDomainWarningsHiddenByDefault(t *testing.T) {
 	assertWarningOutput(t, "telegram.org\n", false, "get", "telegram", "--type", "domains")
 }
@@ -386,73 +261,28 @@ func TestRunSearchWarningsHiddenByDefault(t *testing.T) {
 func TestRunSearchWarningsEnabledByInfo(t *testing.T) {
 	assertWarningOutput(t, "telegram.org\n", true, "services", "search", "telegram")
 }
-
 func TestRunSiteFailureAlwaysReportsError(t *testing.T) {
-	server := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "unavailable", http.StatusServiceUnavailable)
-	})
-	result := execute(t, "get", "telegram.org", "--site", "--type", "domains", "--iplist-url", server.URL)
-	assert.Equal(t, 1, result.code)
-	assert.Empty(t, result.out)
-	assert.Contains(t, result.err, "error:")
-	assert.NotContains(t, result.err, "warning:")
-}
-
-const release = `lists:
-  - name: discord
-    length: 4
-    rules: ["domain:shared.com", "domain:cdn.discord.com:@cn", "full:ignored.discord.com", "keyword:discord"]
-  - name: standalone
-    length: 1
-    rules: ["domain:standalone.org"]
-  - name: categorymessengers
-    length: 1
-    rules: ["domain:excluded.com"]
-  - name: discord-extra
-    length: 1
-    rules: ["domain:excluded.net"]
-`
-
-func combinedSources(t *testing.T, iplistDown, v2flyDown bool, downloads *atomic.Int32) (*httptest.Server, *httptest.Server) {
-	t.Helper()
-	v2flyServer := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		downloads.Add(1)
-		if v2flyDown {
-			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		writeResponse(t, w, release)
-	})
-	iplistServer := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if iplistDown {
-			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if r.URL.Query().Get("data") == "" {
-			writeResponse(t, w, `{"discord.com":{},"discord.gg":{}}`)
-			return
-		}
-		if r.URL.Query().Get("site") == "discord.gg" {
-			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		writeResponse(t, w, `{"discord.com":["shared.com"]}`)
-	})
-	return iplistServer, v2flyServer
+	r := execute(t, "get", "telegram.org", "--site", "--type", "domains")
+	assert.Equal(t, 1, r.code)
+	assert.Empty(t, r.out)
+	assert.Contains(t, r.err, "error:")
+	assert.NotContains(t, r.err, "warning:")
 }
 
 func assertV2flyIntegration(t *testing.T, term, want string, iplistDown, v2flyDown bool) {
 	t.Helper()
-	var downloads atomic.Int32
-	iplistServer, v2flyServer := combinedSources(t, iplistDown, v2flyDown, &downloads)
-	var out, diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"get", term, "--type", "domains", "--iplist-url", iplistServer.URL, "--v2fly-url", v2flyServer.URL}, &out, &diagnostics, "")
-	assert.Zero(t, code)
-	assert.Equal(t, want, out.String())
-	assert.Empty(t, diagnostics.String())
-	assert.Equal(t, int32(1), downloads.Load())
+	i, v := sharedFixture, release
+	if iplistDown {
+		i = ""
+	}
+	if v2flyDown {
+		v = ""
+	}
+	dir := fixtureDir(t, i, v)
+	tr := forbidHTTP(t)
+	assert.Equal(t, commandResult{out: want}, execute(t, "get", term, "--type", "domains", "--data-dir", dir))
+	assert.Zero(t, tr.calls.Load())
 }
-
 func TestRunCombinesBothSources(t *testing.T) {
 	assertV2flyIntegration(t, "discord", "cdn.discord.com\nshared.com\n", false, false)
 }
@@ -468,34 +298,15 @@ func TestRunRetainsV2flyWhenIplistFails(t *testing.T) {
 func TestRunRetainsIplistWhenV2flyFails(t *testing.T) {
 	assertV2flyIntegration(t, "discord", "shared.com\n", false, true)
 }
-
-func assertV2flyNotRequested(t *testing.T, command ...string) {
+func assertV2flyNotRequested(t *testing.T, args ...string) {
 	t.Helper()
-	var downloads atomic.Int32
-	v2flyServer := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		downloads.Add(1)
-		http.Error(w, "must not be called", http.StatusServiceUnavailable)
-	})
-	iplistServer := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Query().Get("data") {
-		case "":
-			writeResponse(t, w, `{"telegram.org":{}}`)
-		case "ip4":
-			writeResponse(t, w, `{"telegram.org":["192.0.2.1"]}`)
-		case "cidr4":
-			writeResponse(t, w, `{"telegram.org":["192.0.2.0/24"]}`)
-		case "domains":
-			writeResponse(t, w, `{"telegram.org":["telegram.org"]}`)
-		}
-	})
-	args := append(command, "--iplist-url", iplistServer.URL, "--v2fly-url", v2flyServer.URL)
-	result := execute(t, args...)
-	assert.Zero(t, result.code)
-	assert.NotEmpty(t, result.out)
-	assert.Empty(t, result.err)
-	assert.Zero(t, downloads.Load())
+	tr := forbidHTTP(t)
+	r := executeCatalog(t, telegramFixture, args...)
+	assert.Zero(t, r.code)
+	assert.NotEmpty(t, r.out)
+	assert.Empty(t, r.err)
+	assert.Zero(t, tr.calls.Load())
 }
-
 func TestRunIPsDoesNotContactV2fly(t *testing.T) {
 	assertV2flyNotRequested(t, "get", "telegram", "--type", "ips")
 }
@@ -505,15 +316,7 @@ func TestRunCIDRsDoesNotContactV2fly(t *testing.T) {
 func TestRunSiteDoesNotContactV2fly(t *testing.T) {
 	assertV2flyNotRequested(t, "get", "telegram.org", "--type", "domains", "--site")
 }
-
 func TestRunSearchCombinedCatalogue(t *testing.T) {
-	server := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/release" {
-			writeResponse(t, w, "lists:\n  - name: telegram\n    length: 1\n    rules: [\"domain:telegram.org\"]\n  - name: categoryall\n    length: 0\n    rules: []\n")
-		} else {
-			writeResponse(t, w, `{"telegram.org":{}}`)
-		}
-	})
-	result := execute(t, "services", "search", "telegram", "--iplist-url", server.URL, "--v2fly-url", server.URL+"/release")
-	assert.Equal(t, commandResult{out: "telegram\ntelegram.org\n"}, result)
+	dir := fixtureDir(t, telegramFixture, "lists:\n  - name: telegram\n    length: 1\n    rules: [\"domain:telegram.org\"]\n  - name: categoryall\n    length: 0\n    rules: []\n")
+	assert.Equal(t, commandResult{out: "telegram\ntelegram.org\ntelegram.org.example.com\n"}, execute(t, "services", "search", "telegram", "--data-dir", dir))
 }

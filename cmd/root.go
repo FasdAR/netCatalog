@@ -42,9 +42,6 @@ var rootCmd = &cobra.Command{
 	Args:          cobra.NoArgs,
 	RunE:          func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-		if rootOptions.timeout <= 0 {
-			return fmt.Errorf("timeout must be positive")
-		}
 		if rootOptions.source != "" && rootOptions.source != "iplist" && rootOptions.source != "v2fly" {
 			return fmt.Errorf("--source must be iplist or v2fly")
 		}

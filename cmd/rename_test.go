@@ -17,7 +17,10 @@ func TestRunHelpUsesProjectName(t *testing.T) {
 }
 
 func TestRunUsesIplistURLFlag(t *testing.T) {
-	server := youtubeServer(t)
-	result := execute(t, "get", "youtube", "--type", "domains", "--iplist-url", server.URL)
-	assert.Equal(t, commandResult{out: "youtube.com\n"}, result)
+	dir := t.TempDir()
+	url := payloadServer(t, fullIPList, nil)
+	result := execute(t, "update", "--source", "iplist", "--data-dir", dir, "--iplist-url", url)
+	assert.Zero(t, result.code)
+	assert.Empty(t, result.err)
+	assert.Equal(t, commandResult{out: "iplist.example\n"}, execute(t, "get", "discord", "--type", "domains", "--data-dir", dir))
 }

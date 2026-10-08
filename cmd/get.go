@@ -48,8 +48,15 @@ var getCmd = &cobra.Command{
 		warnings := rootOptions.warnings(cmd.ErrOrStderr())
 		var selection resolver.Selection
 		if site {
+			if p == nil {
+				return runtimeError(fmt.Errorf("iplist local snapshot unavailable; run netCatalog update --source iplist"))
+			}
 			domain := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(term), "."))
-			selection = resolver.Selection{Name: domain, Services: []resolver.Service{{Domain: domain, Bindings: []resolver.Binding{{Source: p.ID(), Key: domain}}}}}
+			key, found := p.PortalKey(domain)
+			if !found {
+				return fmt.Errorf("unknown iplist portal %q", domain)
+			}
+			selection = resolver.Selection{Name: domain, Services: []resolver.Service{{Domain: domain, Bindings: []resolver.Binding{{Source: p.ID(), Key: key}}}}}
 		} else {
 			catalogue, err := loadCatalogue(cmd.Context(), engine, warnings)
 			if err != nil {
@@ -68,7 +75,7 @@ var getCmd = &cobra.Command{
 			}
 		}
 		if result.Succeeded == 0 {
-			return runtimeError(fmt.Errorf("all data requests failed; use --info for details"))
+			return runtimeError(fmt.Errorf("all local data reads failed: %v", result.Warnings))
 		}
 		return nil
 	},
