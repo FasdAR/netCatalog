@@ -7,17 +7,26 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"netCatalog/internal/catalogstore"
 	"netCatalog/internal/providers/iplist"
 	"netCatalog/internal/providers/v2fly"
 )
 
 type options struct {
+	dataDir   string
 	source    string
 	iplistURL string
 	v2flyURL  string
 	timeout   time.Duration
 	info      bool
 	color     bool
+}
+
+func (o *options) catalogDir() (string, error) {
+	if o.dataDir != "" {
+		return o.dataDir, nil
+	}
+	return catalogstore.DefaultDir()
 }
 
 var rootOptions = &options{}
@@ -46,6 +55,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	flags := rootCmd.PersistentFlags()
+	flags.StringVar(&rootOptions.dataDir, "data-dir", "", "local catalog directory (default: user data directory)")
 	flags.StringVar(&rootOptions.source, "source", "", "use only iplist or v2fly for get and services (default: all applicable sources)")
 	flags.StringVar(&rootOptions.iplistURL, "iplist-url", iplist.DefaultURL, "iplist HTTP endpoint")
 	flags.StringVar(&rootOptions.v2flyURL, "v2fly-url", v2fly.DefaultURL, "compiled v2fly YAML release URL (empty disables the source)")

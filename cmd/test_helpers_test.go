@@ -34,6 +34,7 @@ func runForTest(t *testing.T, ctx context.Context, args []string, stdout, stderr
 	t.Helper()
 	resetCommand(t, rootCmd)
 	t.Cleanup(func() { resetCommand(t, rootCmd) })
+	rootOptions.dataDir = t.TempDir()
 	rootOptions.v2flyURL = defaultV2flyURL
 	return run(ctx, args, stdout, stderr)
 }
