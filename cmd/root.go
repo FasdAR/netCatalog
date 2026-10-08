@@ -34,7 +34,8 @@ var rootOptions = &options{}
 var rootCmd = &cobra.Command{
 	Use:   "netCatalog",
 	Short: "Get service domains, IP addresses, and CIDR networks",
-	Long: "netCatalog retrieves public service lists over HTTP without a persistent cache.\n" +
+	Long: "netCatalog searches local service catalogs without network access.\n" +
+		"Run netCatalog update first to download the latest iplist and v2fly snapshots.\n" +
 		"Records are printed one per line; warnings require --info.\n" +
 		"Exit codes: 0 success (including partial/empty results), 1 runtime failure, 2 invalid input.",
 	SilenceUsage:  true,
@@ -53,9 +54,9 @@ func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	flags := rootCmd.PersistentFlags()
 	flags.StringVar(&rootOptions.dataDir, "data-dir", "", "local catalog directory (default: user data directory)")
-	flags.StringVar(&rootOptions.source, "source", "", "use only iplist or v2fly for get and services (default: all applicable sources)")
-	flags.StringVar(&rootOptions.iplistURL, "iplist-url", iplist.DefaultURL, "iplist HTTP endpoint")
-	flags.StringVar(&rootOptions.v2flyURL, "v2fly-url", v2fly.DefaultURL, "compiled v2fly YAML release URL (empty disables the source)")
-	flags.DurationVar(&rootOptions.timeout, "timeout", 30*time.Second, "timeout per HTTP request")
+	flags.StringVar(&rootOptions.source, "source", "", "use only iplist or v2fly for update, get and services (default: all applicable sources)")
+	flags.StringVar(&rootOptions.iplistURL, "iplist-url", iplist.DefaultURL, "iplist HTTP endpoint (update only)")
+	flags.StringVar(&rootOptions.v2flyURL, "v2fly-url", v2fly.DefaultURL, "compiled v2fly YAML URL (update only; empty skips v2fly during update)")
+	flags.DurationVar(&rootOptions.timeout, "timeout", 30*time.Second, "timeout per HTTP request (update only)")
 	flags.BoolVar(&rootOptions.info, "info", false, "show warnings on stderr (orange in a terminal)")
 }

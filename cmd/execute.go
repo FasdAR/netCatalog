@@ -11,6 +11,7 @@ import (
 // Execute runs the global command tree once using process arguments and streams.
 // It returns 0 for successful, partial or empty results, 1 for runtime or write
 // failures, and 2 for invalid input. It does not terminate the process.
+// The update command returns 1 if any selected source fails, even on partial success.
 func Execute(ctx context.Context) int {
 	return run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 }

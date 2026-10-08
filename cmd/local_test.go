@@ -145,3 +145,40 @@ func TestRunLocalSitePreservesPortalKey(t *testing.T) {
 	seedSnapshot(t, dir, "iplist", `{"TELEGRAM.ORG.":{"domains":["telegram.org"],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]}}`)
 	assert.Equal(t, commandResult{out: "telegram.org\n"}, execute(t, "get", "TELEGRAM.ORG.", "--site", "--type", "domains", "--data-dir", dir))
 }
+
+func TestRunHelpDocumentsOfflineWorkflow(t *testing.T) {
+	tr := forbidHTTP(t)
+	r := execute(t, "--help", "--data-dir", filepath.Join(t.TempDir(), "absent"))
+	assert.Zero(t, r.code)
+	assert.Contains(t, r.out, "netCatalog update")
+	assert.Contains(t, r.out, "local")
+	assert.Contains(t, r.out, "--data-dir")
+	assert.Contains(t, r.out, "--source")
+	assert.Zero(t, tr.calls.Load())
+}
+
+func TestRunUpdateHelpDocumentsIndependentSnapshots(t *testing.T) {
+	tr := forbidHTTP(t)
+	r := execute(t, "update", "--help")
+	assert.Zero(t, r.code)
+	assert.Contains(t, r.out, "--source")
+	assert.Contains(t, r.out, "--data-dir")
+	assert.Contains(t, r.out, "previous snapshot")
+	assert.Zero(t, tr.calls.Load())
+}
+
+func TestRunGetHelpDocumentsLocalReads(t *testing.T) {
+	tr := forbidHTTP(t)
+	r := execute(t, "get", "--help")
+	assert.Zero(t, r.code)
+	assert.Contains(t, r.out, "local")
+	assert.Contains(t, r.out, "netCatalog update")
+	assert.Zero(t, tr.calls.Load())
+}
+
+func TestRunSourcesWithoutDataDirectory(t *testing.T) {
+	tr := forbidHTTP(t)
+	r := execute(t, "sources", "list", "--data-dir", filepath.Join(t.TempDir(), "absent"), "--source", "v2fly")
+	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, r)
+	assert.Zero(t, tr.calls.Load())
+}

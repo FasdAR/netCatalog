@@ -15,9 +15,10 @@ var site bool
 var getCmd = &cobra.Command{
 	Use:   "get SERVICE",
 	Short: "Get domains, IP addresses, or CIDR networks for a service",
-	Long: "Get records for SERVICE, one per line. Short names (discord) combine\n" +
+	Long: "Get records from local snapshots for SERVICE, one per line; run netCatalog update first.\n" +
+		"Short names (discord) combine\n" +
 		"portals with the same first label (discord.*) and matching named lists.\n" +
-		"Exact domains (discord.com) select only that portal. Failed requests and invalid records are skipped.",
+		"Exact domains (discord.com) select only that portal. Invalid records are skipped; no HTTP requests are made.",
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		term := args[0]
@@ -75,7 +76,7 @@ var getCmd = &cobra.Command{
 			}
 		}
 		if result.Succeeded == 0 {
-			return runtimeError(fmt.Errorf("all local data reads failed: %v", result.Warnings))
+			return runtimeError(fmt.Errorf("all local data reads failed: %v; run netCatalog update", result.Warnings))
 		}
 		return nil
 	},
@@ -85,5 +86,5 @@ func init() {
 	rootCmd.AddCommand(getCmd)
 	getCmd.Flags().StringVar(&kind, "type", "", "domains, ips or cidrs (required)")
 	getCmd.Flags().StringVar(&family, "family", "ipv4", "ipv4, ipv6 or all (not for domains)")
-	getCmd.Flags().BoolVar(&site, "site", false, "query an exact iplist portal without catalogue discovery")
+	getCmd.Flags().BoolVar(&site, "site", false, "read an exact iplist portal from the local snapshot")
 }

@@ -25,7 +25,11 @@ type updateSource struct {
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Download and atomically replace local source catalogs",
-	Args:  cobra.NoArgs,
+	Long: "Download full iplist JSON and compiled v2fly YAML into --data-dir.\n" +
+		"Use --source iplist or --source v2fly to update only one source.\n" +
+		"A failed update keeps the previous snapshot; other successful updates are retained.\n" +
+		"Exit code 1 means at least one selected source failed to update.",
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		o := rootOptions
 		if o.timeout <= 0 {
