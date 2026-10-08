@@ -33,6 +33,14 @@ var getCmd = &cobra.Command{
 		if kind == "domains" && cmd.Flags().Changed("family") {
 			return fmt.Errorf("--family does not apply to domains")
 		}
+		if rootOptions.source == "v2fly" {
+			if site {
+				return fmt.Errorf("--site requires iplist; it cannot be used with --source v2fly")
+			}
+			if kind != "domains" {
+				return fmt.Errorf("--source v2fly supports only --type domains")
+			}
+		}
 		engine, p, err := rootOptions.engine(!site && kind == "domains")
 		if err != nil {
 			return err

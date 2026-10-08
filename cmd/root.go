@@ -12,6 +12,7 @@ import (
 )
 
 type options struct {
+	source    string
 	iplistURL string
 	v2flyURL  string
 	timeout   time.Duration
@@ -35,6 +36,9 @@ var rootCmd = &cobra.Command{
 		if rootOptions.timeout <= 0 {
 			return fmt.Errorf("timeout must be positive")
 		}
+		if rootOptions.source != "" && rootOptions.source != "iplist" && rootOptions.source != "v2fly" {
+			return fmt.Errorf("--source must be iplist or v2fly")
+		}
 		return nil
 	},
 }
@@ -42,6 +46,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	flags := rootCmd.PersistentFlags()
+	flags.StringVar(&rootOptions.source, "source", "", "use only iplist or v2fly for get and services (default: all applicable sources)")
 	flags.StringVar(&rootOptions.iplistURL, "iplist-url", iplist.DefaultURL, "iplist HTTP endpoint")
 	flags.StringVar(&rootOptions.v2flyURL, "v2fly-url", v2fly.DefaultURL, "compiled v2fly YAML release URL (empty disables the source)")
 	flags.DurationVar(&rootOptions.timeout, "timeout", 30*time.Second, "timeout per HTTP request")

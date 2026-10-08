@@ -81,6 +81,11 @@ bin/netCatalog get telegram --type domains --info
 # Объединить список discord из v2fly и порталы discord.* из iplist
 bin/netCatalog get discord --type domains
 
+# Использовать только выбранный источник
+bin/netCatalog get discord --type domains --source v2fly
+bin/netCatalog services list --source iplist
+bin/netCatalog services search telegram --source v2fly
+
 # Отдельные IP / подсети; IPv4 по умолчанию
 bin/netCatalog get youtube --type ips
 bin/netCatalog get youtube --type cidrs --family ipv4
@@ -115,6 +120,14 @@ bin/netCatalog --help
 именованный список `discord` из v2fly. Для `ips` и `cidrs` используется только iplist;
 v2fly при таких командах не загружается. Сбой одного источника или портала не мешает
 вернуть данные остальных. Сервис, который есть только в v2fly, также доступен по имени.
+
+`--source iplist|v2fly` ограничивает источник для `get` и `services list/search`:
+каталог и данные загружаются только из него. Остальные источники не запрашиваются,
+их URL не проверяются. Без флага сохраняется выбор всех подходящих источников.
+Можно выбрать только один источник. Неизвестное значение даёт код `2`.
+`--source v2fly` поддерживает только `--type domains`, несовместим с `--site`
+и требует непустого `--v2fly-url`; нарушения дают код `2` до HTTP-запросов.
+`sources list` всегда показывает все поддерживаемые источники, независимо от `--source`.
 
 Если совпадений по первой части нет, используется прежний поиск по подстроке:
 единственное совпадение выбирается, несколько дают код `2` с предложением уточнить

@@ -12,13 +12,21 @@ import (
 )
 
 func (o *options) engine(includeV2fly bool) (resolver.Resolver, *iplist.Provider, error) {
-	client := &http.Client{Timeout: o.timeout}
-	p, err := iplist.New(o.iplistURL, client)
-	if err != nil {
-		return resolver.Resolver{}, nil, err
+	if o.source == "v2fly" && o.v2flyURL == "" {
+		return resolver.Resolver{}, nil, fmt.Errorf("--source v2fly requires a non-empty --v2fly-url")
 	}
-	engine := resolver.Resolver{Providers: []resolver.Provider{p}}
-	if includeV2fly && o.v2flyURL != "" {
+	client := &http.Client{Timeout: o.timeout}
+	var p *iplist.Provider
+	var engine resolver.Resolver
+	if o.source != "v2fly" {
+		var err error
+		p, err = iplist.New(o.iplistURL, client)
+		if err != nil {
+			return resolver.Resolver{}, nil, err
+		}
+		engine.Providers = append(engine.Providers, p)
+	}
+	if o.source != "iplist" && includeV2fly && o.v2flyURL != "" {
 		provider, err := v2fly.New(o.v2flyURL, client)
 		if err != nil {
 			return resolver.Resolver{}, nil, err
