@@ -50,19 +50,19 @@ func assertLocalRead(t *testing.T, want string, args ...string) {
 }
 
 func TestRunLocalDomains(t *testing.T) {
-	assertLocalRead(t, "cdn.discord.com\niplist.example\nshared.com\n", "get", "discord", "--type", "domains")
+	assertLocalRead(t, "cdn.discord.com\niplist.example\nshared.com\n", "get", "discord", "--type", "domain")
 }
 
 func TestRunLocalIPs(t *testing.T) {
-	assertLocalRead(t, "192.0.2.1\n2001:db8::1\n", "get", "discord", "--type", "ips", "--family", "all")
+	assertLocalRead(t, "192.0.2.1\n2001:db8::1\n", "get", "discord", "--type", "ip", "--family", "all")
 }
 
 func TestRunLocalCIDRs(t *testing.T) {
-	assertLocalRead(t, "192.0.2.0/24\n2001:db8::/64\n", "get", "discord", "--type", "cidrs", "--family", "all")
+	assertLocalRead(t, "192.0.2.0/24\n2001:db8::/64\n", "get", "discord", "--type", "cidr", "--family", "all")
 }
 
 func TestRunLocalExactPortal(t *testing.T) {
-	assertLocalRead(t, "iplist.example\n", "get", "discord.com", "--type", "domains")
+	assertLocalRead(t, "iplist.example\n", "get", "discord.com", "--type", "domain")
 }
 
 func TestRunLocalList(t *testing.T) {
@@ -109,14 +109,14 @@ func TestRunLocalIPsIgnoreCorruptedV2fly(t *testing.T) {
 	dir := t.TempDir()
 	seedSnapshot(t, dir, "iplist", fullIPList)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "v2fly.snapshot"), []byte("broken"), 0600))
-	r := execute(t, "get", "discord", "--type", "ips", "--data-dir", dir, "--info")
+	r := execute(t, "get", "discord", "--type", "ip", "--data-dir", dir, "--info")
 	assert.Equal(t, commandResult{out: "192.0.2.1\n"}, r)
 }
 
 func TestRunLocalRejectsUnknownPortal(t *testing.T) {
 	dir := t.TempDir()
 	seedSnapshot(t, dir, "iplist", fullIPList)
-	r := execute(t, "get", "missing.org", "--type", "domains", "--data-dir", dir)
+	r := execute(t, "get", "missing.org", "--type", "domain", "--data-dir", dir)
 	assert.Equal(t, 2, r.code)
 	assert.Empty(t, r.out)
 }
@@ -143,7 +143,7 @@ func TestRunLocalRejectsCorruptedSelectedSnapshot(t *testing.T) {
 func TestRunLocalExactPortalPreservesUpstreamKey(t *testing.T) {
 	dir := t.TempDir()
 	seedSnapshot(t, dir, "iplist", `{"TELEGRAM.ORG.":{"domains":["telegram.org"],"ip4":[],"ip6":[],"cidr4":[],"cidr6":[]}}`)
-	assert.Equal(t, commandResult{out: "telegram.org\n"}, execute(t, "get", "TELEGRAM.ORG.", "--type", "domains", "--data-dir", dir))
+	assert.Equal(t, commandResult{out: "telegram.org\n"}, execute(t, "get", "TELEGRAM.ORG.", "--type", "domain", "--data-dir", dir))
 }
 
 func TestRunHelpDocumentsOfflineWorkflow(t *testing.T) {
@@ -180,6 +180,6 @@ func TestRunGetHelpDocumentsLocalReads(t *testing.T) {
 func TestRunSourcesWithoutDataDirectory(t *testing.T) {
 	tr := forbidHTTP(t)
 	r := execute(t, "sources", "--data-dir", filepath.Join(t.TempDir(), "absent"), "--source", "v2fly")
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, r)
+	assert.Equal(t, commandResult{out: "iplist\tdomain,ip,cidr\t-\nv2fly\tdomain\t-\n"}, r)
 	assert.Zero(t, tr.calls.Load())
 }

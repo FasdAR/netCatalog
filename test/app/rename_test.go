@@ -22,5 +22,5 @@ func TestRunUsesIplistURLFlag(t *testing.T) {
 	result := execute(t, "update", "--source", "iplist", "--data-dir", dir, "--iplist-url", url)
 	assert.Zero(t, result.code)
 	assert.Empty(t, result.err)
-	assert.Equal(t, commandResult{out: "iplist.example\n"}, execute(t, "get", "discord", "--type", "domains", "--data-dir", dir))
+	assert.Equal(t, commandResult{out: "iplist.example\n"}, execute(t, "get", "discord", "--type", "domain", "--data-dir", dir))
 }

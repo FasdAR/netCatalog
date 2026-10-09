@@ -13,9 +13,9 @@ type DataKind string
 
 // Supported categories of network records.
 const (
-	Domains DataKind = "domains" // Domain rules.
-	IPs     DataKind = "ips"     // Individual IP addresses.
-	CIDRs   DataKind = "cidrs"   // Network prefixes in CIDR notation.
+	Domains DataKind = "domain" // Domain rules.
+	IPs     DataKind = "ip"     // Individual IP addresses.
+	CIDRs   DataKind = "cidr"   // Network prefixes in CIDR notation.
 )
 
 // Family selects IP versions for IP and CIDR queries; it is ignored for domains.

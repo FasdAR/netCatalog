@@ -21,8 +21,8 @@ func newSourcesCommand(o *options) *cobra.Command {
 				return runtimeError(err)
 			}
 			for _, source := range []struct{ id, types string }{
-				{"iplist", "domains,ips,cidrs"},
-				{"v2fly", "domains"},
+				{"iplist", "domain,ip,cidr"},
+				{"v2fly", "domain"},
 			} {
 				updatedAt := "-"
 				if snapshot, err := catalogstore.Read(dir, source.id); err == nil {

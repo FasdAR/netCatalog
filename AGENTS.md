@@ -87,22 +87,22 @@ bin/netCatalog services list
 bin/netCatalog services search telegram
 
 # Получить домены; короткое имя объединяет discord.* и список discord из v2fly
-bin/netCatalog get discord --type domains
+bin/netCatalog get discord --type domain
 
 # Получить домены только из v2fly
-bin/netCatalog get discord --type domains --source v2fly
+bin/netCatalog get discord --type domain --source v2fly
 
 # Получить отдельные IP обоих семейств из iplist
-bin/netCatalog get youtube --type ips --family all
+bin/netCatalog get youtube --type ip --family all
 
 # Получить IPv6-подсети из iplist
-bin/netCatalog get youtube --type cidrs --family ipv6
+bin/netCatalog get youtube --type cidr --family ipv6
 
 # Выбрать точный портал iplist из локального снимка
-bin/netCatalog get youtube.com --type domains --source iplist
+bin/netCatalog get youtube.com --type domain --source iplist
 
 # Включить предупреждения в stderr
-bin/netCatalog get telegram --type domains --info
+bin/netCatalog get telegram --type domain --info
 
 # Обновить и читать отдельный набор каталогов по одному и тому же пути
 bin/netCatalog update --data-dir ./catalogs
@@ -113,7 +113,7 @@ bin/netCatalog --help
 bin/netCatalog get --help
 ```
 
-- `--type domains|ips|cidrs` обязателен для `get`.
+- `--type domain|ip|cidr` обязателен для `get`.
 - `--family ipv4|ipv6|all` применяется к IP/CIDR, по умолчанию `ipv4`; для доменов запрещён.
 - `--source iplist|v2fly` ограничивает источник для обновления и чтения. v2fly поддерживает только домены.
 - `--iplist-url`, `--v2fly-url`, `--timeout` действуют только для `update`.

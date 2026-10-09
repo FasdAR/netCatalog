@@ -24,19 +24,19 @@ func newGetCommand(rootOptions *options) *cobra.Command {
 			if strings.TrimSpace(term) == "" {
 				return fmt.Errorf("SERVICE must not be empty")
 			}
-			if kind != "domains" && kind != "ips" && kind != "cidrs" {
-				return fmt.Errorf("--type must be domains, ips or cidrs")
+			if kind != "domain" && kind != "ip" && kind != "cidr" {
+				return fmt.Errorf("--type must be domain, ip or cidr")
 			}
 			if family != "ipv4" && family != "ipv6" && family != "all" {
 				return fmt.Errorf("--family must be ipv4, ipv6 or all")
 			}
-			if kind == "domains" && cmd.Flags().Changed("family") {
-				return fmt.Errorf("--family does not apply to domains")
+			if kind == "domain" && cmd.Flags().Changed("family") {
+				return fmt.Errorf("--family does not apply to domain type")
 			}
-			if rootOptions.source == "v2fly" && kind != "domains" {
-				return fmt.Errorf("--source v2fly supports only --type domains")
+			if rootOptions.source == "v2fly" && kind != "domain" {
+				return fmt.Errorf("--source v2fly supports only --type domain")
 			}
-			engine, err := rootOptions.engine(kind == "domains")
+			engine, err := rootOptions.engine(kind == "domain")
 			if err != nil {
 				return err
 			}
@@ -63,7 +63,7 @@ func newGetCommand(rootOptions *options) *cobra.Command {
 		},
 	}
 
-	getCmd.Flags().StringVar(&kind, "type", "", "domains, ips or cidrs (required)")
-	getCmd.Flags().StringVar(&family, "family", "ipv4", "ipv4, ipv6 or all (not for domains)")
+	getCmd.Flags().StringVar(&kind, "type", "", "domain, ip or cidr (required)")
+	getCmd.Flags().StringVar(&family, "family", "ipv4", "ipv4, ipv6 or all (not for domain)")
 	return getCmd
 }

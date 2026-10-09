@@ -58,31 +58,31 @@ bin/netCatalog services search telegram
 # telegram и telegram.org (если они присутствуют в выбранных источниках)
 
 # Домены: по одному на строку, без префиксов
-bin/netCatalog get youtube --type domains
+bin/netCatalog get youtube --type domain
 
 # Показать предупреждения (оранжевые в терминале, в stderr)
-bin/netCatalog get telegram --type domains --info
+bin/netCatalog get telegram --type domain --info
 
 # Использовать только выбранный источник
-bin/netCatalog get discord --type domains --source v2fly
+bin/netCatalog get discord --type domain --source v2fly
 bin/netCatalog services list --source iplist
 bin/netCatalog services search telegram --source v2fly
 
 # Отдельные IP / подсети; IPv4 по умолчанию
-bin/netCatalog get youtube --type ips
-bin/netCatalog get youtube --type cidrs --family ipv4
-bin/netCatalog get youtube --type cidrs --family ipv6
-bin/netCatalog get youtube --type ips --family all
+bin/netCatalog get youtube --type ip
+bin/netCatalog get youtube --type cidr --family ipv4
+bin/netCatalog get youtube --type cidr --family ipv6
+bin/netCatalog get youtube --type ip --family all
 
 # Точный домен имеет приоритет перед поиском по подстроке
-bin/netCatalog get youtube.com --type domains
+bin/netCatalog get youtube.com --type domain
 
 # Точный портал только из iplist
-bin/netCatalog get youtube.com --type domains --source iplist
+bin/netCatalog get youtube.com --type domain --source iplist
 
 # Собственный экземпляр iplist или другой публичный портал
 bin/netCatalog update --source iplist --iplist-url https://iplist.opencck.org/ --timeout 15s
-bin/netCatalog get youtube --type ips
+bin/netCatalog get youtube --type ip
 
 # Изолированный набор снимков: одинаковый --data-dir для записи и чтения
 bin/netCatalog update --data-dir ./catalogs
@@ -108,7 +108,7 @@ bin/netCatalog --help
 `discord.gg`, `discord.media`. `discord-tools.com`, `notdiscord.com` и
 `cdn.discord.com` не подходят. Для каждого портала читаются локальные данные, затем
 списки объединяются с удалением дубликатов. При запросе доменов добавляется также
-именованный список `discord` из v2fly. Для `ips` и `cidrs` используется только iplist;
+именованный список `discord` из v2fly. Для `ip` и `cidr` используется только iplist;
 снимок v2fly при таких командах не читается. Сбой одного источника не мешает
 вернуть данные остальных. Сервис, который есть только в v2fly, также доступен по имени.
 
@@ -116,7 +116,7 @@ bin/netCatalog --help
 обновляется или читается только выбранный источник. Остальные источники не запрашиваются,
 их URL не проверяются. Без флага используются все подходящие источники.
 Можно выбрать только один источник. Неизвестное значение даёт код `2`.
-`--source v2fly` поддерживает только `--type domains` для `get`;
+`--source v2fly` поддерживает только `--type domain` для `get`;
 нарушения дают код `2` до чтения снимков.
 `sources` всегда показывает все поддерживаемые источники, независимо от `--source`.
 
@@ -243,9 +243,9 @@ https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat_
 - Другую выгрузку можно указать при `update --v2fly-url URL`, например закреплённый релиз.
 
 ```sh
-bin/netCatalog get discord --type domains
-bin/netCatalog get discord --type domains --info
-bin/netCatalog get discord --type domains --source iplist
+bin/netCatalog get discord --type domain
+bin/netCatalog get discord --type domain --info
+bin/netCatalog get discord --type domain --source iplist
 ```
 
 ## Важно для Keenetic

@@ -58,24 +58,24 @@ func TestRunReturnsFailureWhenSourcesCannotBeWritten(t *testing.T) {
 func TestRunReturnsFailureWhenEntriesCannotBeWritten(t *testing.T) {
 	dir := fixtureDir(t, youtubeFixture, "")
 	var diagnostics bytes.Buffer
-	code := runForTest(context.Background(), t, []string{"get", "youtube", "--type", "domains", "--data-dir", dir}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"get", "youtube", "--type", "domain", "--data-dir", dir}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, diagnostics.String(), "output unavailable")
 }
 
 func TestRunDoesNotRetainInfoFlag(t *testing.T) {
 	dir := fixtureDir(t, warningFixture, "")
-	first := execute(t, "get", "telegram", "--type", "domains", "--info", "--data-dir", dir)
+	first := execute(t, "get", "telegram", "--type", "domain", "--info", "--data-dir", dir)
 	assert.Zero(t, first.code)
 	assert.Contains(t, first.err, "warning:")
-	second := execute(t, "get", "telegram", "--type", "domains", "--data-dir", dir)
+	second := execute(t, "get", "telegram", "--type", "domain", "--data-dir", dir)
 	assert.Equal(t, commandResult{out: "telegram.org\n"}, second)
 }
 
 func TestRunEmptyV2flyURLDoesNotDisableLocalSource(t *testing.T) {
 	dir := fixtureDir(t, sharedFixture, release)
 	tr := forbidHTTP(t)
-	r := execute(t, "get", "discord", "--type", "domains", "--data-dir", dir, "--v2fly-url", "")
+	r := execute(t, "get", "discord", "--type", "domain", "--data-dir", dir, "--v2fly-url", "")
 	assert.Equal(t, commandResult{out: "cdn.discord.com\nshared.com\n"}, r)
 	assert.Zero(t, tr.calls.Load())
 }
@@ -90,9 +90,9 @@ func TestRunUnknownCommandReportsErrorOnce(t *testing.T) {
 
 func TestRunDoesNotRetainFamilyFlag(t *testing.T) {
 	dir := fixtureDir(t, youtubeFixture, "")
-	first := execute(t, "get", "youtube.com", "--type", "ips", "--family", "ipv6", "--data-dir", dir)
+	first := execute(t, "get", "youtube.com", "--type", "ip", "--family", "ipv6", "--data-dir", dir)
 	assert.Equal(t, commandResult{}, first)
-	second := execute(t, "get", "youtube.com", "--type", "domains", "--data-dir", dir)
+	second := execute(t, "get", "youtube.com", "--type", "domain", "--data-dir", dir)
 	assert.Equal(t, commandResult{out: "youtube.com\n"}, second)
 }
 
@@ -119,5 +119,5 @@ func TestRunDoesNotRetainFailedOutput(t *testing.T) {
 
 func TestRootRegistersNestedListCommands(t *testing.T) {
 	assert.Equal(t, commandResult{out: "openai\nyoutube\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, execute(t, "sources"))
+	assert.Equal(t, commandResult{out: "iplist\tdomain,ip,cidr\t-\nv2fly\tdomain\t-\n"}, execute(t, "sources"))
 }
