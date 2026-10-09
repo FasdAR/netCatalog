@@ -104,12 +104,12 @@ func TestRunSearchShowsSeparatePortals(t *testing.T) {
 func TestRunSearchIgnoresSourceGroups(t *testing.T) {
 	assert.Equal(t, commandResult{}, executeCatalog(t, telegramFixture, "services", "search", "messengers"))
 }
-func TestRunGetAmbiguousServiceDoesNotFetchData(t *testing.T) {
+func TestRunGetSubstringDoesNotFetchData(t *testing.T) {
 	tr := forbidHTTP(t)
 	r := executeCatalog(t, telegramFixture, "get", "tele", "--type", "ip")
 	assert.Equal(t, 2, r.code)
 	assert.Empty(t, r.out)
-	assert.Contains(t, r.err, "ambiguous")
+	assert.Contains(t, r.err, "no portal matching")
 	assert.Zero(t, tr.calls.Load())
 }
 func TestRunGetExactServiceDoesNotBroaden(t *testing.T) {

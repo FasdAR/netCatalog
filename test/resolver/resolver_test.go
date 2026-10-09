@@ -127,19 +127,13 @@ func TestResolveNormalizesInput(t *testing.T) {
 func TestResolveSelectsShortName(t *testing.T) {
 	selection, err := searchCatalogue().Resolve("youtube")
 	require.NoError(t, err)
-	assert.Equal(t, resolver.Selection{Name: "youtube.com", Services: []resolver.Service{{Domain: "youtube.com"}}}, selection)
+	assert.Equal(t, resolver.Selection{Name: "youtube", Services: []resolver.Service{{Domain: "youtube.com"}}}, selection)
 }
 
-func TestResolveSelectsUniqueSubstring(t *testing.T) {
-	selection, err := searchCatalogue().Resolve("yout")
-	require.NoError(t, err)
-	assert.Equal(t, "youtube.com", selection.Name)
-}
-
-func TestResolveRejectsAmbiguousSubstring(t *testing.T) {
-	_, err := searchCatalogue().Resolve("tele")
+func TestResolveRejectsSubstring(t *testing.T) {
+	_, err := searchCatalogue().Resolve("yout")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ambiguous")
+	assert.Contains(t, err.Error(), "no portal matching")
 }
 
 func TestResolveRejectsMissingService(t *testing.T) {

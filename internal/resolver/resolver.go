@@ -253,8 +253,8 @@ func (c Catalogue) Search(term string) []Service {
 
 // Resolve selects an exact domain first. A short name then selects all portals
 // with that entire first label and named lists with that name. This is a name
-// heuristic, not proof of shared ownership. Otherwise a unique substring match
-// is selected. Empty, missing, or ambiguous terms return an error.
+// heuristic, not proof of shared ownership. Substrings are not matched.
+// Empty or unknown terms return an error.
 func (c Catalogue) Resolve(term string) (Selection, error) {
 	term = normalizeDomain(term)
 	if term == "" {
@@ -276,25 +276,10 @@ func (c Catalogue) Resolve(term string) (Selection, error) {
 			}
 		}
 		if len(matches) > 0 {
-			name := term
-			if len(matches) == 1 {
-				name = matches[0].Identifier()
-			}
-			return Selection{Name: name, Services: matches}, nil
+			return Selection{Name: term, Services: matches}, nil
 		}
 	}
-	matches := c.Search(term)
-	if len(matches) == 1 {
-		return Selection{Name: matches[0].Identifier(), Services: matches}, nil
-	}
-	if len(matches) == 0 {
-		return Selection{}, fmt.Errorf("no portal matching %q in the available catalogue", term)
-	}
-	domains := make([]string, 0, len(matches))
-	for _, service := range matches {
-		domains = append(domains, service.Identifier())
-	}
-	return Selection{}, fmt.Errorf("ambiguous service %q; specify a domain: %s", term, strings.Join(domains, ", "))
+	return Selection{}, fmt.Errorf("no portal matching %q in the available catalogue", term)
 }
 
 func compact(items []string) []string {
