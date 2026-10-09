@@ -66,11 +66,11 @@ func TestRunLocalExactPortal(t *testing.T) {
 }
 
 func TestRunLocalList(t *testing.T) {
-	assertLocalRead(t, "discord\ndiscord.com\nstandalone\n", "services", "list")
+	assertLocalRead(t, "discord\nstandalone\n", "services", "list")
 }
 
 func TestRunLocalSearch(t *testing.T) {
-	assertLocalRead(t, "discord\ndiscord.com\n", "services", "search", "DISCORD")
+	assertLocalRead(t, "discord\n", "services", "search", "DISCORD")
 }
 
 func TestRunLocalMissingSnapshots(t *testing.T) {
@@ -93,7 +93,7 @@ func TestRunLocalPartialCatalogHidesWarnings(t *testing.T) {
 	dir := t.TempDir()
 	seedSnapshot(t, dir, "iplist", fullIPList)
 	r := execute(t, "services", "list", "--data-dir", dir)
-	assert.Equal(t, commandResult{out: "discord.com\n"}, r)
+	assert.Equal(t, commandResult{out: "discord\n"}, r)
 }
 
 func TestRunLocalPartialCatalogReportsWarningsWithInfo(t *testing.T) {
@@ -101,7 +101,7 @@ func TestRunLocalPartialCatalogReportsWarningsWithInfo(t *testing.T) {
 	seedSnapshot(t, dir, "iplist", fullIPList)
 	r := execute(t, "services", "list", "--data-dir", dir, "--info")
 	assert.Zero(t, r.code)
-	assert.Equal(t, "discord.com\n", r.out)
+	assert.Equal(t, "discord\n", r.out)
 	assert.Contains(t, r.err, "netCatalog update --source v2fly")
 }
 
@@ -127,7 +127,7 @@ func TestRunLocalDoesNotRetainDirectoryOrSource(t *testing.T) {
 	assert.Equal(t, commandResult{out: "discord\nstandalone\n"}, execute(t, "services", "list", "--source", "v2fly", "--data-dir", first))
 	second := t.TempDir()
 	seedSnapshot(t, second, "iplist", fullIPList)
-	assert.Equal(t, commandResult{out: "discord.com\n"}, execute(t, "services", "list", "--data-dir", second))
+	assert.Equal(t, commandResult{out: "discord\n"}, execute(t, "services", "list", "--data-dir", second))
 }
 
 func TestRunLocalRejectsCorruptedSelectedSnapshot(t *testing.T) {

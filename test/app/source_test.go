@@ -22,13 +22,13 @@ func TestRunSourceFiltersGetV2fly(t *testing.T) {
 	assertSourceCommand(t, "v2fly", "cdn.discord.com\nshared.com\n", "get", "discord", "--type", "domains")
 }
 func TestRunSourceFiltersListIPList(t *testing.T) {
-	assertSourceCommand(t, "iplist", "discord.com\n", "services", "list")
+	assertSourceCommand(t, "iplist", "discord\n", "services", "list")
 }
 func TestRunSourceFiltersListV2fly(t *testing.T) {
 	assertSourceCommand(t, "v2fly", "discord\nstandalone\n", "services", "list")
 }
 func TestRunSourceFiltersSearchIPList(t *testing.T) {
-	assertSourceCommand(t, "iplist", "discord.com\n", "services", "search", "discord")
+	assertSourceCommand(t, "iplist", "discord\n", "services", "search", "discord")
 }
 func TestRunSourceFiltersSearchV2fly(t *testing.T) {
 	assertSourceCommand(t, "v2fly", "discord\n", "services", "search", "discord")

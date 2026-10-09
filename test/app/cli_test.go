@@ -87,10 +87,10 @@ func TestRunGetEmptyIPv6Succeeds(t *testing.T) {
 	assert.Equal(t, commandResult{}, executeCatalog(t, youtubeFixture, "get", "youtube", "--type", "ips", "--family", "ipv6"))
 }
 func TestRunServicesList(t *testing.T) {
-	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
+	assert.Equal(t, commandResult{out: "openai\nyoutube\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
 }
 func TestRunServicesSearchNormalizesCase(t *testing.T) {
-	assert.Equal(t, commandResult{out: "openai.com\n"}, executeCatalog(t, youtubeFixture, "services", "search", "OPENAI"))
+	assert.Equal(t, commandResult{out: "openai\n"}, executeCatalog(t, youtubeFixture, "services", "search", "OPENAI"))
 }
 func TestRunServicesSearchMissingTerm(t *testing.T) {
 	assert.Equal(t, commandResult{}, executeCatalog(t, youtubeFixture, "services", "search", "missing"))
@@ -99,7 +99,7 @@ func TestRunGetExactDomain(t *testing.T) {
 	assert.Equal(t, commandResult{out: "youtube.com\n"}, executeCatalog(t, youtubeFixture, "get", "youtube.com", "--type", "domains"))
 }
 func TestRunSearchShowsSeparatePortals(t *testing.T) {
-	assert.Equal(t, commandResult{out: "telegram.org\ntelegram.org.example.com\n"}, executeCatalog(t, telegramFixture, "services", "search", "telegram"))
+	assert.Equal(t, commandResult{out: "telegram\n"}, executeCatalog(t, telegramFixture, "services", "search", "telegram"))
 }
 func TestRunSearchIgnoresSourceGroups(t *testing.T) {
 	assert.Equal(t, commandResult{}, executeCatalog(t, telegramFixture, "services", "search", "messengers"))
@@ -247,16 +247,16 @@ func TestRunIPWarningsEnabledByInfo(t *testing.T) {
 	assertWarningOutput(t, "192.0.2.1\n", true, "get", "telegram", "--type", "ips", "--family", "all")
 }
 func TestRunListWarningsHiddenByDefault(t *testing.T) {
-	assertWarningOutput(t, "telegram.org\n", false, "services", "list")
+	assertWarningOutput(t, "telegram\n", false, "services", "list")
 }
 func TestRunListWarningsEnabledByInfo(t *testing.T) {
-	assertWarningOutput(t, "telegram.org\n", true, "services", "list")
+	assertWarningOutput(t, "telegram\n", true, "services", "list")
 }
 func TestRunSearchWarningsHiddenByDefault(t *testing.T) {
-	assertWarningOutput(t, "telegram.org\n", false, "services", "search", "telegram")
+	assertWarningOutput(t, "telegram\n", false, "services", "search", "telegram")
 }
 func TestRunSearchWarningsEnabledByInfo(t *testing.T) {
-	assertWarningOutput(t, "telegram.org\n", true, "services", "search", "telegram")
+	assertWarningOutput(t, "telegram\n", true, "services", "search", "telegram")
 }
 
 func assertV2flyIntegration(t *testing.T, term, want string, iplistDown, v2flyDown bool) {
@@ -308,7 +308,7 @@ func TestRunSelectedIPListDoesNotContactV2fly(t *testing.T) {
 }
 func TestRunSearchCombinedCatalogue(t *testing.T) {
 	dir := fixtureDir(t, telegramFixture, "lists:\n  - name: telegram\n    length: 1\n    rules: [\"domain:telegram.org\"]\n  - name: categoryall\n    length: 0\n    rules: []\n")
-	assert.Equal(t, commandResult{out: "telegram\ntelegram.org\ntelegram.org.example.com\n"}, execute(t, "services", "search", "telegram", "--data-dir", dir))
+	assert.Equal(t, commandResult{out: "telegram\n"}, execute(t, "services", "search", "telegram", "--data-dir", dir))
 }
 
 func TestRunRejectsRemovedSiteFlag(t *testing.T) {

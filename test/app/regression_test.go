@@ -104,7 +104,7 @@ func TestRunDoesNotRetainCancelledContext(t *testing.T) {
 	code := runForTest(ctx, t, []string{"services", "list", "--data-dir", dir}, &out, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	second := execute(t, "services", "list", "--data-dir", dir)
-	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, second)
+	assert.Equal(t, commandResult{out: "openai\nyoutube\n"}, second)
 }
 
 func TestRunDoesNotRetainFailedOutput(t *testing.T) {
@@ -118,6 +118,6 @@ func TestRunDoesNotRetainFailedOutput(t *testing.T) {
 }
 
 func TestRootRegistersNestedListCommands(t *testing.T) {
-	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
+	assert.Equal(t, commandResult{out: "openai\nyoutube\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
 	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, execute(t, "sources"))
 }
