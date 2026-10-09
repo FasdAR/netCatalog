@@ -17,11 +17,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Tag must point to a commit on master
+      - name: Tag must point to a commit on the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          git fetch origin master
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
-            echo "::error::Tag $GITHUB_REF_NAME is not on master"
+          git fetch origin "$DEFAULT_BRANCH"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH"; then
+            echo "::error::Tag $GITHUB_REF_NAME is not on $DEFAULT_BRANCH"
             exit 1
           fi
 
