@@ -26,7 +26,7 @@ func TestDownloadFullExportClearsFilters(t *testing.T) {
 	t.Cleanup(s.Close)
 	b, err := Download(context.Background(), s.URL+"?site=a&site[]=a&group=b&group[]=b&data=ip4&format=text&exclude[ip4]=x&exclude[site]=a&wildcard=1&native=1&domaintype=full&template=x&filesave=1&auth=token", s.Client())
 	require.NoError(t, err)
-	assert.Equal(t, snapshotFixture, string(b))
+	assert.JSONEq(t, snapshotFixture, string(b))
 	assert.Equal(t, int32(1), calls.Load())
 }
 

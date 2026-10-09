@@ -45,21 +45,21 @@ func TestRunInvalidTypeDoesNotRequestHTTP(t *testing.T) {
 
 func TestRunReturnsFailureWhenHelpCannotBeWritten(t *testing.T) {
 	var diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"--help"}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"--help"}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, diagnostics.String(), "output unavailable")
 }
 
 func TestRunReturnsFailureWhenSourcesCannotBeWritten(t *testing.T) {
 	var diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"sources", "list"}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"sources", "list"}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 }
 
 func TestRunReturnsFailureWhenEntriesCannotBeWritten(t *testing.T) {
 	dir := fixtureDir(t, youtubeFixture, "")
 	var diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"get", "youtube", "--type", "domains", "--data-dir", dir}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"get", "youtube", "--type", "domains", "--data-dir", dir}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, diagnostics.String(), "output unavailable")
 }
@@ -110,7 +110,7 @@ func TestRunDoesNotRetainCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var out, diagnostics bytes.Buffer
-	code := runForTest(t, ctx, []string{"services", "list", "--data-dir", dir}, &out, &diagnostics, "")
+	code := runForTest(ctx, t, []string{"services", "list", "--data-dir", dir}, &out, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	second := execute(t, "services", "list", "--data-dir", dir)
 	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, second)
@@ -118,7 +118,7 @@ func TestRunDoesNotRetainCancelledContext(t *testing.T) {
 
 func TestRunDoesNotRetainFailedOutput(t *testing.T) {
 	var diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"--help"}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"--help"}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	second := execute(t, "--help")
 	assert.Zero(t, second.code)

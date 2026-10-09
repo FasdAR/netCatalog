@@ -161,7 +161,7 @@ func TestRunUpdateReportsWriteFailure(t *testing.T) {
 
 func TestRunUpdateReportsOutputFailure(t *testing.T) {
 	var diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"update", "--source", "iplist", "--iplist-url", payloadServer(t, fullIPList, nil)}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"update", "--source", "iplist", "--iplist-url", payloadServer(t, fullIPList, nil)}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, diagnostics.String(), "output unavailable")
 }

@@ -10,7 +10,7 @@ import (
 
 func TestRunHelpUsesProjectName(t *testing.T) {
 	var out, diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), []string{"--help"}, &out, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"--help"}, &out, &diagnostics, "")
 	assert.Zero(t, code)
 	assert.Contains(t, out.String(), "netCatalog")
 	assert.Empty(t, diagnostics.String())

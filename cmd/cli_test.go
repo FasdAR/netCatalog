@@ -26,7 +26,7 @@ func writeResponse(t *testing.T, w http.ResponseWriter, body string) {
 func execute(t *testing.T, args ...string) commandResult {
 	t.Helper()
 	var out, diagnostics bytes.Buffer
-	code := runForTest(t, context.Background(), args, &out, &diagnostics, "")
+	code := runForTest(context.Background(), t, args, &out, &diagnostics, "")
 	return commandResult{code: code, out: out.String(), err: diagnostics.String()}
 }
 

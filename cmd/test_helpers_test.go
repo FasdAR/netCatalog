@@ -12,7 +12,7 @@ import (
 
 // The production tree is executed once per process. These tests deliberately
 // reuse it, so flag values, Changed markers and execution resources are reset.
-func resetCommand(t *testing.T, cmd *cobra.Command) {
+func resetCommand(ctx context.Context, t *testing.T, cmd *cobra.Command) {
 	t.Helper()
 	resetFlag := func(flag *pflag.Flag) {
 		require.NoError(t, flag.Value.Set(flag.DefValue))
@@ -23,17 +23,17 @@ func resetCommand(t *testing.T, cmd *cobra.Command) {
 	cmd.SetArgs([]string{})
 	cmd.SetOut(nil)
 	cmd.SetErr(nil)
-	// Cobra inherits the root context only when a child's context is nil.
-	cmd.SetContext(nil)
+	// Set the invocation context explicitly throughout the reused command tree.
+	cmd.SetContext(ctx)
 	for _, child := range cmd.Commands() {
-		resetCommand(t, child)
+		resetCommand(ctx, t, child)
 	}
 }
 
-func runForTest(t *testing.T, ctx context.Context, args []string, stdout, stderr io.Writer, defaultV2flyURL string) int {
+func runForTest(ctx context.Context, t *testing.T, args []string, stdout, stderr io.Writer, defaultV2flyURL string) int {
 	t.Helper()
-	resetCommand(t, rootCmd)
-	t.Cleanup(func() { resetCommand(t, rootCmd) })
+	resetCommand(ctx, t, rootCmd)
+	t.Cleanup(func() { resetCommand(context.Background(), t, rootCmd) })
 	rootOptions.dataDir = t.TempDir()
 	rootOptions.v2flyURL = defaultV2flyURL
 	return run(ctx, args, stdout, stderr)
