@@ -4,7 +4,7 @@ CLI на Go для получения доменов, IP-адресов и CIDR-
 Подключены публичный [iplist](https://github.com/rekryt/iplist) и готовая YAML-выгрузка
 [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community).
 `netCatalog update` скачивает источники и сохраняет локальные снимки. Поиск и получение
-данных работают **без HTTP**, только по этим снимкам. Программа **не меняет маршруты роутера**.
+данных работают **без HTTP**, только по этим снимкам.
 
 ## Сборка
 
