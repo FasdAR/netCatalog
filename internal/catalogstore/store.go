@@ -158,10 +158,12 @@ func Write(ctx context.Context, dir string, snapshot Snapshot) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return publishSnapshot(runtime.GOOS, f.Name(), filepath.Join(dir, snapshot.Metadata.Source+".snapshot"))
+	return PublishSnapshot(runtime.GOOS, f.Name(), filepath.Join(dir, snapshot.Metadata.Source+".snapshot"))
 }
 
-func publishSnapshot(goos, oldPath, newPath string) error {
+// PublishSnapshot atomically replaces a snapshot on supported Unix platforms.
+// Unsupported platforms leave both paths unchanged and return an error.
+func PublishSnapshot(goos, oldPath, newPath string) error {
 	switch goos {
 	case "aix", "android", "darwin", "dragonfly", "freebsd", "illumos", "ios", "linux", "netbsd", "openbsd", "solaris":
 		return os.Rename(oldPath, newPath)

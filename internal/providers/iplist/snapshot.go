@@ -77,12 +77,6 @@ func (*SnapshotProvider) Capabilities() []resolver.DataKind {
 	return []resolver.DataKind{resolver.Domains, resolver.IPs, resolver.CIDRs}
 }
 
-// PortalKey finds an upstream key by normalized domain identity.
-func (p *SnapshotProvider) PortalKey(domain string) (string, bool) {
-	key, found := p.keys[domain]
-	return key, found
-}
-
 // ListServices returns sorted portals and a diagnostic for skipped identities.
 func (p *SnapshotProvider) ListServices(ctx context.Context) ([]resolver.Service, error) {
 	if err := ctx.Err(); err != nil {
@@ -138,7 +132,7 @@ func (p *SnapshotProvider) Fetch(ctx context.Context, key string, q resolver.Que
 			if err := ctx.Err(); err != nil {
 				return r, err
 			}
-			entry, err := normalize(value, field)
+			entry, err := Normalize(value, field)
 			if err != nil {
 				invalid++
 				continue

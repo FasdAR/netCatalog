@@ -6,12 +6,12 @@ import (
 	"os"
 	"os/signal"
 
-	"netCatalog/cmd"
+	"netCatalog/app"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	code := cmd.Execute(ctx)
+	code := app.Execute(ctx)
 	stop()
 	os.Exit(code)
 }

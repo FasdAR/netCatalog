@@ -176,7 +176,7 @@ func (p *Provider) Fetch(ctx context.Context, key string, q resolver.Query) (res
 		invalid := 0
 		for _, items := range sites {
 			for _, item := range items {
-				entry, err := normalize(item, field)
+				entry, err := Normalize(item, field)
 				if err != nil {
 					invalid++
 					continue
@@ -191,7 +191,8 @@ func (p *Provider) Fetch(ctx context.Context, key string, q resolver.Query) (res
 	return result, nil
 }
 
-func normalize(value, field string) (resolver.Entry, error) {
+// Normalize validates and canonicalizes a record from an iplist data field.
+func Normalize(value, field string) (resolver.Entry, error) {
 	value = strings.TrimSpace(value)
 	entry := resolver.Entry{}
 	if field == "domains" {
