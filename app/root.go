@@ -57,6 +57,6 @@ func newRootCommand(rootOptions *options) *cobra.Command {
 	flags.StringVar(&rootOptions.v2flyURL, "v2fly-url", v2fly.DefaultURL, "compiled v2fly YAML URL (update only; empty skips v2fly during update)")
 	flags.DurationVar(&rootOptions.timeout, "timeout", 30*time.Second, "timeout per HTTP request (update only)")
 	flags.BoolVar(&rootOptions.info, "info", false, "show warnings on stderr (orange in a terminal)")
-	rootCmd.AddCommand(newGetCommand(rootOptions), newServicesCommand(rootOptions), newSourcesCommand(), newUpdateCommand(rootOptions))
+	rootCmd.AddCommand(newGetCommand(rootOptions), newServicesCommand(rootOptions), newSourcesCommand(rootOptions), newUpdateCommand(rootOptions))
 	return rootCmd
 }

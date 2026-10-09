@@ -28,6 +28,6 @@ func TestExecuteDoesNotRetainInvalidSource(t *testing.T) {
 		require.NoError(t, err)
 		return string(output)
 	}
-	assert.Contains(t, invoke(2, "sources", "list", "--source", "bad"), "iplist or v2fly")
-	assert.Equal(t, "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n", invoke(0, "sources", "list"))
+	assert.Contains(t, invoke(2, "sources", "--source", "bad"), "iplist or v2fly")
+	assert.Equal(t, "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n", invoke(0, "sources", "--data-dir", t.TempDir()))
 }

@@ -29,7 +29,7 @@ func TestRunGetHelpWithoutServiceDoesNotRequestHTTP(t *testing.T) {
 }
 
 func TestRunSourcesRejectsExtraArgument(t *testing.T) {
-	assertInvalid(t, "sources", "list", "extra")
+	assertInvalid(t, "sources", "extra")
 }
 
 func TestRunInvalidTypeDoesNotRequestHTTP(t *testing.T) {
@@ -51,7 +51,7 @@ func TestRunReturnsFailureWhenHelpCannotBeWritten(t *testing.T) {
 
 func TestRunReturnsFailureWhenSourcesCannotBeWritten(t *testing.T) {
 	var diagnostics bytes.Buffer
-	code := runForTest(context.Background(), t, []string{"sources", "list"}, failingWriter{}, &diagnostics, "")
+	code := runForTest(context.Background(), t, []string{"sources"}, failingWriter{}, &diagnostics, "")
 	assert.Equal(t, 1, code)
 }
 
@@ -119,5 +119,5 @@ func TestRunDoesNotRetainFailedOutput(t *testing.T) {
 
 func TestRootRegistersNestedListCommands(t *testing.T) {
 	assert.Equal(t, commandResult{out: "openai.com\nyoutube.com\n"}, executeCatalog(t, youtubeFixture, "services", "list"))
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, execute(t, "sources", "list"))
+	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, execute(t, "sources"))
 }

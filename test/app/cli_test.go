@@ -179,8 +179,13 @@ func TestRunNoArgumentsShowsHelp(t *testing.T) {
 	assert.Contains(t, r.out, "netCatalog")
 	assert.Empty(t, r.err)
 }
-func TestRunSourcesList(t *testing.T) {
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, execute(t, "sources", "list"))
+func TestRunSourcesWithoutSnapshots(t *testing.T) {
+	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, execute(t, "sources"))
+}
+func TestRunSourcesShowsUpdatedAt(t *testing.T) {
+	dir := fixtureDir(t, youtubeFixture, "")
+	want := commandResult{out: "iplist\tdomains,ips,cidrs\t2026 01 01 | 00:00:00\nv2fly\tdomains\t-\n"}
+	assert.Equal(t, want, execute(t, "sources", "--data-dir", dir))
 }
 func TestRunGetHelpWithService(t *testing.T) {
 	r := execute(t, "get", "youtube", "--help")

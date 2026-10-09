@@ -88,7 +88,7 @@ bin/netCatalog get youtube --type ips
 bin/netCatalog update --data-dir ./catalogs
 bin/netCatalog services search telegram --data-dir ./catalogs
 
-bin/netCatalog sources list
+bin/netCatalog sources
 bin/netCatalog --help
 ```
 
@@ -115,7 +115,7 @@ bin/netCatalog --help
 Можно выбрать только один источник. Неизвестное значение даёт код `2`.
 `--source v2fly` поддерживает только `--type domains` для `get`;
 нарушения дают код `2` до чтения снимков.
-`sources list` всегда показывает все поддерживаемые источники, независимо от `--source`.
+`sources` всегда показывает все поддерживаемые источники, независимо от `--source`.
 
 Если совпадений по первой части нет, используется прежний поиск по подстроке:
 единственное совпадение выбирается, несколько дают код `2` с предложением уточнить

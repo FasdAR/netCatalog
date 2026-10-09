@@ -78,7 +78,7 @@ bin/netCatalog update
 bin/netCatalog update --source iplist
 
 # Показать все поддерживаемые источники и типы данных
-bin/netCatalog sources list
+bin/netCatalog sources
 
 # Показать сервисы из локальных каталогов
 bin/netCatalog services list

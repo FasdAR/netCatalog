@@ -179,7 +179,7 @@ func TestRunGetHelpDocumentsLocalReads(t *testing.T) {
 
 func TestRunSourcesWithoutDataDirectory(t *testing.T) {
 	tr := forbidHTTP(t)
-	r := execute(t, "sources", "list", "--data-dir", filepath.Join(t.TempDir(), "absent"), "--source", "v2fly")
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, r)
+	r := execute(t, "sources", "--data-dir", filepath.Join(t.TempDir(), "absent"), "--source", "v2fly")
+	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, r)
 	assert.Zero(t, tr.calls.Load())
 }

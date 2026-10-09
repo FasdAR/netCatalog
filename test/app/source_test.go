@@ -67,6 +67,6 @@ func TestRunDoesNotRetainSourceFlag(t *testing.T) {
 	assert.Equal(t, commandResult{out: "shared.com\n"}, execute(t, append(args, "--source", "iplist")...))
 	assert.Equal(t, commandResult{out: "cdn.discord.com\nshared.com\n"}, execute(t, args...))
 }
-func TestRunSourcesListRemainsCompleteWithSourceFlag(t *testing.T) {
-	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\nv2fly\tdomains\n"}, execute(t, "sources", "list", "--source", "iplist"))
+func TestRunSourcesRemainsCompleteWithSourceFlag(t *testing.T) {
+	assert.Equal(t, commandResult{out: "iplist\tdomains,ips,cidrs\t-\nv2fly\tdomains\t-\n"}, execute(t, "sources", "--source", "iplist"))
 }
